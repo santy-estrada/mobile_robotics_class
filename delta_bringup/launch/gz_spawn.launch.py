@@ -1,0 +1,71 @@
+import os
+
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+import xacro
+
+def generate_launch_description():
+    gazebo_pkg_name = "delta_gazebo"
+    bringup_pkg_name = "delta_bringup"
+    description_pkg_name = "delta_description"
+
+    use_sim_time = LaunchConfiguration("use_sim_time")
+    world = LaunchConfiguration("world")
+
+    # --- Robot description (xacro -> URDF XML string) ---
+    xacro_file = os.path.join(get_package_share_directory(description_pkg_name), "diffdrive_urdf", "robot.urdf.xacro")
+    robot_description = xacro.process_file(xacro_file).toxml()
+
+    rsp = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        output="screen",
+        parameters=[{"robot_description": robot_description,
+                     "use_sim_time": use_sim_time}],
+    )
+
+    # --- Launch Gazebo (via ros_gz_sim launch file) ---
+    gz_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("ros_gz_sim"),
+                "launch",
+                "gz_sim.launch.py",
+            )
+        ),
+        launch_arguments={"gz_args": ['-r -v4 --render-engine ogre ', world], 'on_exit_shutdown': 'true'}.items(),
+    )
+
+    # --- Spawn entity into Gazebo from robot_description topic ---
+    spawn = Node(
+        package="ros_gz_sim",
+        executable="create",
+        output="screen",
+        arguments=[
+            "-name", "diffbot",
+            "-topic", "robot_description",
+            "-x", "0.0", "-y", "0.0", "-z", "0.5",
+        ],
+    )
+   
+
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            "use_sim_time",
+            default_value="true",
+            description="Use simulation (Gazebo) clock if true",
+        ),
+        DeclareLaunchArgument(
+            "world",
+            default_value=os.path.join(get_package_share_directory(gazebo_pkg_name), "worlds", "empty_world.sdf"),
+            description="Full path to world SDF file",
+        ),
+        gz_launch,
+        rsp,
+        spawn,
+    ])
