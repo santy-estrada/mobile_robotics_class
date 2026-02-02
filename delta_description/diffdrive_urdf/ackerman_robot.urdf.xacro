@@ -71,8 +71,44 @@
             <origin xyz="0 0 0" rpy="0 0 0"/>
         </collision>
     </link>
-    <link name="steering_FR_link"/>
-    <link name="steering_FL_link"/>
+    <link name="steering_FR_link">
+        <visual>
+            <geometry>
+                <box size="0.01 0.01 0.01"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </visual>
+        <inertial>
+            <mass value="0.1"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+        </inertial>
+        <collision>
+            <geometry>
+                <box size="0.01 0.01 0.01"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </collision>
+    </link>
+    <link name="steering_FL_link">
+        <visual>
+            <geometry>
+                <box size="0.01 0.01 0.01"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </visual>
+        <inertial>
+            <mass value="0.1"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+        </inertial>
+        <collision>
+            <geometry>
+                <box size="0.01 0.01 0.01"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </collision>
+    </link>
     <joint name="chassis_wheel_RR_joint" type="continuous">
         <parent link="chassis_link"/>
         <child link="rwheel_link"/>
@@ -83,7 +119,7 @@
     </joint>
     <joint name="chassis_wheel_RL_joint" type="continuous">
         <parent link="chassis_link"/>
-        <child link="rwheel_link2"/>ackerman_robot.urdf
+        <child link="rwheel_link2"/>
         <origin xyz="-${off_x} ${off_y} -${off_z} " rpy="0 0 0"/>
         <axis xyz="0 1 0"/> <!-- eje de rotación del joint, se define en coordenadas del link padre -->
         <limit effort="1" lower="0" upper="${2*pi}" velocity="1"/>
