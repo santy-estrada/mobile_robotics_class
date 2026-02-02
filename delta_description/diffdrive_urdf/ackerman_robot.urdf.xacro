@@ -1,0 +1,138 @@
+<?xml version='1.0'?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ackerman_robot">
+    <xacro:property name="lx_box" value="${41/10}" /><!-- se aconseja definir porpiedades gemetricas con estas lineas -->
+    <xacro:property name="ly_box" value="${16/10}" />
+    <xacro:property name="lz_box" value="${13.3/10}" />
+
+    <xacro:property name="off_x" value="${12.55/10}" />
+    <xacro:property name="off_z" value="${5.45/10}" />
+    <xacro:property name="off_z_chasi" value="${6.65/10}" />
+
+    <xacro:property name="rad_cil" value="${10.2/2/10}" />
+    <xacro:property name="altura" value="${4.5/10}" />
+    <xacro:property name="off_y" value="${12.15/10}" />
+
+
+
+  <xacro:macro name="wheel_macro" params="w_name w_radius w_lenght ">
+    <link name="${w_name}">  <!-- este link es un cuerpo con unos atributos de visual, inercia y colision -->
+        <!-- aquí vamos a definir el chassis como cuerpo, entonces la gemetría se refiere a esta pieza -->
+        <visual> <!-- dentro de visual se define la geometría del objeto -->
+            <geometry>
+            <cylinder radius="${w_radius}" length="${w_lenght}"/> <!-- La altura de los cilindros por defecto están siempre en z, para cambiarlo generar rotación -->
+            </geometry>
+            <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        </visual>
+
+        <inertial>
+          <mass value="1"/> <!-- masa objeto -->
+          <origin xyz="0 0 0" rpy="0 0 0"/> <!-- centro de masa -->
+          <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/> <!-- matriz inercia -->
+        </inertial>
+
+        <collision>
+            <geometry>
+            <cylinder radius="${w_radius}" length="${w_lenght}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        </collision>
+    </link>
+  </xacro:macro>
+
+    <link name="base_link"> <!-- este es un link obligatorio para ros es el sistema fijo -->
+        <!-- ... -->
+    </link>
+
+    <joint name="base_chassis_joint" type="fixed"> <!-- este joint entiendalo como la restricción del chassis con fijo -->
+        <parent link="base_link"/>
+        <child link="chassis_link"/>
+        <origin xyz="0 0 ${off_z_chasi} " rpy="0 0 0"/>
+    </joint>
+
+    <link name="chassis_link">  <!-- este link es un cuerpo con unos atributos de visual, inercia y colision -->
+        <!-- aquí vamos a definir el chassis como cuerpo, entonces la gemetría se refiere a esta pieza -->
+        <visual> <!-- dentro de visual se define la geometría del objeto -->
+            <geometry>
+            <box size="${lx_box} ${ly_box} ${lz_box}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/> <!-- posición y orientación del objeto respecto al link -->
+        </visual>
+
+        <inertial>
+          <mass value="1"/> <!-- masa objeto -->
+          <origin xyz="0 0 0" rpy="0 0 0"/> <!-- centro de masa -->
+          <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/> <!-- matriz inercia -->
+        </inertial>
+
+        <collision>
+            <geometry>
+            <box size="${lx_box} ${ly_box} ${lz_box}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </collision>
+    </link>
+    <link name="steering_FR_link"/>
+    <link name="steering_FL_link"/>
+    <joint name="chassis_wheel_RR_joint" type="continuous">
+        <parent link="chassis_link"/>
+        <child link="rwheel_link"/>
+        <origin xyz="-${off_x} -${off_y} -${off_z} " rpy="0 0 0"/>
+        <axis xyz="0 1 0"/> <!-- eje de rotación del joint, se define en coordenadas del link padre -->
+        <limit effort="1" lower="0" upper="${2*pi}" velocity="1"/>
+        <dynamics damping="1" friction="1"/>  
+    </joint>
+    <joint name="chassis_wheel_RL_joint" type="continuous">
+        <parent link="chassis_link"/>
+        <child link="rwheel_link2"/>ackerman_robot.urdf
+        <origin xyz="-${off_x} ${off_y} -${off_z} " rpy="0 0 0"/>
+        <axis xyz="0 1 0"/> <!-- eje de rotación del joint, se define en coordenadas del link padre -->
+        <limit effort="1" lower="0" upper="${2*pi}" velocity="1"/>
+        <dynamics damping="1" friction="1"/>  
+    </joint>
+    <joint name="chassis_rotate_FR_joint" type="continuous">
+        <parent link="chassis_link"/>
+        <child link="steering_FR_link"/>
+        <origin xyz="${off_x} -${off_y} -${off_z} " rpy="0 0 0"/>
+        <axis xyz="0 0 1"/> <!-- eje de rotación del joint, se define en coordenadas del link padre -->
+        <limit effort="1" lower="0" upper="${2*pi}" velocity="1"/>
+        <dynamics damping="1" friction="1"/>  
+    </joint>
+    <joint name="chassis_rotate_FL_joint" type="continuous">
+        <parent link="chassis_link"/>
+        <child link="steering_FL_link"/>
+        <origin xyz="${off_x} ${off_y} -${off_z} " rpy="0 0 0"/>
+        <axis xyz="0 0 1"/> <!-- eje de rotación del joint, se define en coordenadas del link padre -->
+        <limit effort="1" lower="0" upper="${pi/2}" velocity="1"/>
+        <dynamics damping="1" friction="1"/>  
+    </joint>
+    <joint name="chassis_wheel_FR_joint" type="continuous">
+        <parent link="steering_FR_link"/>
+        <child link="rwheel_link3"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/> <!-- eje de rotación del joint, se define en coordenadas del link padre -->
+        <limit effort="1" lower="0" upper="${2*pi}" velocity="1"/>
+        <dynamics damping="1" friction="1"/>  
+    </joint>
+    <joint name="chassis_wheel_FL_joint" type="continuous">
+        <parent link="steering_FL_link"/>
+        <child link="rwheel_link4"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/> <!-- eje de rotación del joint, se define en coordenadas del link padre -->
+        <limit effort="1" lower="0" upper="${2*pi}" velocity="1"/>
+        <dynamics damping="1" friction="1"/>  
+    </joint>
+
+        
+    <xacro:wheel_macro w_name="rwheel_link"
+                       w_radius="${rad_cil}"
+                       w_lenght="${altura}"/>
+    <xacro:wheel_macro w_name="rwheel_link2"
+                       w_radius="${rad_cil}"
+                       w_lenght="${altura}"/>
+    <xacro:wheel_macro w_name="rwheel_link3"
+                       w_radius="${rad_cil}"
+                       w_lenght="${altura}"/>
+    <xacro:wheel_macro w_name="rwheel_link4"
+                       w_radius="${rad_cil}"
+                       w_lenght="${altura}"/>
+</robot>

@@ -9,6 +9,10 @@ from launch_ros.actions import Node
 
 import xacro
 
+ack = True
+
+xacro_model = "ackerman_robot.urdf.xacro" if ack else "robot.urdf.xacro"
+
 def generate_launch_description():
     gazebo_pkg_name = "delta_gazebo"
     bringup_pkg_name = "delta_bringup"
@@ -18,7 +22,7 @@ def generate_launch_description():
     world = LaunchConfiguration("world")
 
     # --- Robot description (xacro -> URDF XML string) ---
-    xacro_file = os.path.join(get_package_share_directory(description_pkg_name), "diffdrive_urdf", "robot.urdf.xacro")
+    xacro_file = os.path.join(get_package_share_directory(description_pkg_name), "diffdrive_urdf", xacro_model)
     robot_description = xacro.process_file(xacro_file).toxml()
 
     rsp = Node(
