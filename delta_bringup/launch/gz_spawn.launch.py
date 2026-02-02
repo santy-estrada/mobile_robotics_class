@@ -10,8 +10,10 @@ from launch_ros.actions import Node
 import xacro
 
 ack = True
+maze = True
 
 xacro_model = "ackerman_robot.urdf.xacro" if ack else "robot.urdf.xacro"
+gz_world = "j_maze.sdf" if maze else "empty_world.sdf"
 
 def generate_launch_description():
     gazebo_pkg_name = "delta_gazebo"
@@ -66,7 +68,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "world",
-            default_value=os.path.join(get_package_share_directory(gazebo_pkg_name), "worlds", "empty_world.sdf"),
+            default_value=os.path.join(get_package_share_directory(gazebo_pkg_name), "worlds", gz_world),
             description="Full path to world SDF file",
         ),
         gz_launch,
