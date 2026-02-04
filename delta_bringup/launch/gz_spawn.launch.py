@@ -9,8 +9,8 @@ from launch_ros.actions import Node
 
 import xacro
 
-ack = True
-maze = True
+ack = False
+maze = False
 
 xacro_model = "ackerman_robot.urdf.xacro" if ack else "robot.urdf.xacro"
 gz_world = "j_maze.sdf" if maze else "empty_world.sdf"
@@ -44,7 +44,7 @@ def generate_launch_description():
                 "gz_sim.launch.py",
             )
         ),
-        launch_arguments={"gz_args": ['-r -v4 --render-engine ogre ', world], 'on_exit_shutdown': 'true'}.items(),
+        launch_arguments={"gz_args": ['-r -v4 ', world], 'on_exit_shutdown': 'true'}.items(),
     )
 
     # --- Spawn entity into Gazebo from robot_description topic ---
@@ -58,6 +58,57 @@ def generate_launch_description():
             "-x", "0.0", "-y", "0.0", "-z", "0.5",
         ],
     )
+
+    #--- Share topics between ROS2 and Gazebo ---
+    bridge_params = os.path.join(get_package_share_directory(gazebo_pkg_name),'config','topic_bridge.yaml')
+    bridge = Node(
+    package="ros_gz_bridge",
+    executable="parameter_bridge",
+    output="screen",
+    arguments=[
+            '--ros-args',
+            '-p',
+            f'config_file:={bridge_params}',
+        ],
+    )
+
+    # -- Controllers ---
+    diff_drive_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["diffdrive_controller"],
+    )
+
+    joint_broad_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_broadcaster_controller"],
+    )
+
+    # -- Use Joystick Controller --
+    joy_params = os.path.join(get_package_share_directory(bringup_pkg_name),'config','joystick.yaml')
+
+    # Run the spawner node from the gazebo_ros package. The entity name doesn't really matter if you only have a single robot.
+    joy_node = Node(package='joy', 
+                    executable='joy_node',
+                    parameters=[joy_params],
+    )
+
+    teleop_node = Node(package='teleop_twist_joy', 
+                    executable='teleop_node',
+                    name="teleop_node",
+                    parameters=[joy_params],
+                    remappings=[('/cmd_vel','/cmd_vel_joy')]
+    )
+
+    twist_mux_params = os.path.join(get_package_share_directory(bringup_pkg_name),'config','twist_mux.yaml')
+    
+    twist_mux_node = Node(package='twist_mux', 
+                    executable='twist_mux',
+                    parameters=[twist_mux_params,{'use_sim_time': True}],
+                    remappings=[('/cmd_vel_out','/diffdrive_controller/cmd_vel')]
+    )
+
    
 
     return LaunchDescription([
@@ -74,4 +125,10 @@ def generate_launch_description():
         gz_launch,
         rsp,
         spawn,
+        bridge,
+        diff_drive_spawner,
+        joint_broad_spawner,
+        joy_node,
+        teleop_node,
+        twist_mux_node,
     ])
