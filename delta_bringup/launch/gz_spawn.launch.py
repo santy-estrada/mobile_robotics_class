@@ -10,10 +10,10 @@ from launch_ros.actions import Node
 import xacro
 
 ack = False
-maze = False
+maze = ["empty_world.sdf", "j_maze.sdf", "melgui_maze.sdf"]
 
 xacro_model = "ackerman_robot.urdf.xacro" if ack else "robot.urdf.xacro"
-gz_world = "j_maze.sdf" if maze else "empty_world.sdf"
+gz_world = maze[2] # Change the index to select a different world
 
 def generate_launch_description():
     gazebo_pkg_name = "delta_gazebo"
@@ -55,7 +55,7 @@ def generate_launch_description():
         arguments=[
             "-name", "diffbot",
             "-topic", "robot_description",
-            "-x", "0.0", "-y", "0.0", "-z", "0.5",
+            "-x", "0.0", "-y", "0.0", "-z", "3.0",
         ],
     )
 

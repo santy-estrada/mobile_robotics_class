@@ -8,6 +8,12 @@
     <!-- Lidar sensor -->
     <xacro:include filename="lidar.xacro"/>
 
+    <!-- IMU sensor -->
+    <xacro:include filename="imu.xacro"/>
+
+    <!-- Depth camera sensor -->
+    <xacro:include filename="depth_camera.xacro"/>
+
     <!-- ros2_control -->
     <xacro:include filename="ros2_control.xacro"/>
 

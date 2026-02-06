@@ -1,5 +1,5 @@
 <sdf version='1.10'>
-  <world name='j_maze'>
+  <world name='maze'>
     <scene>
       <ambient>1 1 1 1</ambient>
       <background>0.800000012 0.800000012 0.800000012 1</background>
@@ -74,7 +74,7 @@
     </model>
     
     <include>
-        <uri>model://j_maze</uri>
+        <uri>model://maze</uri>
         <pose>0 0 0 0 0 0</pose>
     </include>
     
