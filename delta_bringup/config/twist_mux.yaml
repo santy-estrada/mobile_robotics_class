@@ -5,17 +5,21 @@ twist_mux:
     topics:
       ttc_brake:
         topic   : cmd_ttc
-        timeout : 0.1
-        priority: 1000        # Highest priority - safety always overrides
+        timeout : 0.3 
+        priority: 255        # Highest priority - safety always overrides
       joystick  : 
         topic   : cmd_vel_joy
         timeout : 0.5
-        priority: 100
+        priority: 15
       keyboard  : 
         topic   : cmd_vel_key
         timeout : 0.5
-        priority: 50
+        priority: 20
       navigation:
         topic   : cmd_vel_nav
         timeout : 0.5
         priority: 10
+      wall_following:
+        topic   : cmd_vel_ctrl
+        timeout : 0.5
+        priority: 5
