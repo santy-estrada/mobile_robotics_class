@@ -3,16 +3,16 @@
     <scene>
       <ambient>1 1 1 1</ambient>
       <background>0.800000012 0.800000012 0.800000012 1</background>
-      <shadows>true</shadows>
+      <shadows>false</shadows>
     </scene>
 
     <gravity>0 0 -9.8000000000000007</gravity>
     <magnetic_field>5.5644999999999998e-06 2.2875799999999999e-05 -4.2388400000000002e-05</magnetic_field>
     <atmosphere type='adiabatic'/>
     <physics name='1ms' type='ignored'>
-      <max_step_size>0.001</max_step_size>
+      <max_step_size>0.002</max_step_size>
       <real_time_factor>1</real_time_factor>
-      <real_time_update_rate>1000</real_time_update_rate>
+      <real_time_update_rate>500</real_time_update_rate>
     </physics>
     <plugin name='gz::sim::systems::Physics' filename='gz-sim-physics-system'/>
     <plugin name='gz::sim::systems::Sensors' filename='gz-sim-sensors-system'>
@@ -80,7 +80,7 @@
     
     <light name='sun' type='directional'>
       <pose>0 0 0 0 0 0</pose>
-      <cast_shadows>true</cast_shadows>
+      <cast_shadows>false</cast_shadows>
       <intensity>1</intensity>
       <direction>-0.5 0.10000000000000001 -0.90000000000000002</direction>
       <diffuse>0.800000012 0.800000012 0.800000012 1</diffuse>
