@@ -23,15 +23,13 @@ class dist_finder(Node):
         super().__init__('dist_finder')
 
         # -- PARAMETERS --
-        self.declare_parameter('wall_distance', 3.0) # Desired distance to the wall in meters
-        self.declare_parameter('body_velocity', 6.0)   # Forward velocity of the robot in m/s
-        self.declare_parameter('angle_th', 15.0)        # Angle between the two laser rays in degrees
+        self.declare_parameter('wall_distance', 2.0) # Desired distance to the wall in meters
+        self.declare_parameter('body_velocity', 1.0)   # Forward velocity of the robot in m/s
+        self.declare_parameter('angle_th', 45.0)        # Angle between the two laser rays in degrees
 
         self.body_vel = float(self.get_parameter('body_velocity').value)
         self.desired_r = float(self.get_parameter('wall_distance').value)
         self.angle_th = float(self.get_parameter('angle_th').value)
-
-        self.current_cmd_vel = TwistStamped()    # Last received command velocity
 
 
         self.subscription = self.create_subscription(
@@ -57,7 +55,7 @@ class dist_finder(Node):
 
     def _cmd_vel_callback(self, msg: TwistStamped):
         """Store the latest commanded velocity from the controller."""
-        self.current_cmd_vel = msg
+        self.body_vel = msg.twist.linear.x
 
     def scan_callback(self, msg: LaserScan):
         current_time = self.get_clock().now()
@@ -81,7 +79,7 @@ class dist_finder(Node):
         alpha= math.atan((r_A* math.cos(math.radians(angulo)) - r_B)/(r_A * math.sin(math.radians(angulo))))
 
         AB=r_B*math.cos(alpha)
-        AC=self.current_cmd_vel.twist.linear.x*elapsed #asumiendo que la velocidad entra en m/s, dado que elapsed está en metros por segundo, crear una sub a donde se tenag la velocidad del body y meter el valor en la variable self.body_vel
+        AC=self.body_vel*elapsed #asumiendo que la velocidad entra en m/s, dado que elapsed está en metros por segundo, crear una sub a donde se tenag la velocidad del body y meter el valor en la variable self.body_vel
         CD=AB+AC*math.sin(alpha)
         error=self.desired_r-CD
 

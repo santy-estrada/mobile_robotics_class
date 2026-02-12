@@ -10,10 +10,10 @@ class ControlNode(Node):
         super().__init__('control_node')
 
         # -- PARAMETERS --
-        self.declare_parameter('kp', 2.0)                    # Proportional gain for PD controller
-        self.declare_parameter('kd', 0.5)                    # Derivative gain for PD controller
-        self.declare_parameter('max_steering', 1.0)          # Max steering angle saturation (radians)
-        self.declare_parameter('min_steering', -1.0)         # Min steering angle saturation (radians)
+        self.declare_parameter('kp', 0.4)                    # Proportional gain for PD controller
+        self.declare_parameter('kd', 1.0)                    # Derivative gain for PD controller
+        self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
+        self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
         self.declare_parameter('forward_velocity', 1.0)      # Constant forward velocity (m/s)
 
         # Get parameters
@@ -26,6 +26,7 @@ class ControlNode(Node):
         # State variables for derivative calculation
         self.prev_error = 0.0
         self.prev_time = None
+        self.steering_angle = 0.0
 
         # Subscription to error topic
         self.error_sub = self.create_subscription(
@@ -85,12 +86,12 @@ class ControlNode(Node):
 
         # Calculate steering angle: steering = theta - theta_desired
         # (theta is the measured angular error alpha)
-        steering_angle = theta - theta_desired
+        self.steering_angle = -theta_desired
 
         # Apply saturation (min and max limits)
-        steering_angle = max(
+        self.steering_angle = max(
             self.min_steering,
-            min(self.max_steering, steering_angle)
+            min(self.max_steering, self.steering_angle)
         )
 
         # Create and publish command
@@ -98,7 +99,7 @@ class ControlNode(Node):
 
         # Set constant forward velocity and steering angle
         cmd.twist.linear.x = self.forward_vel
-        cmd.twist.angular.z = steering_angle
+        cmd.twist.angular.z = self.steering_angle
 
         self.cmd_pub.publish(cmd)
 
@@ -107,7 +108,7 @@ class ControlNode(Node):
             f"y={y:.3f}m | L={L:.3f}m | alpha={math.degrees(theta):.1f}° | "
             f"e={error:.3f} | e'={error_rate:.3f} | "
             f"theta_desired={math.degrees(theta_desired):.1f}° | "
-            f"Steering={math.degrees(steering_angle):.1f}°"
+            f"Steering={math.degrees(self.steering_angle):.1f}°"
         )
 
 
