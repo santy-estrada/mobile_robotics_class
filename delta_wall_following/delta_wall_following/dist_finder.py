@@ -20,7 +20,7 @@ class dist_finder(Node):
     def __init__(self):
         super().__init__('dist_finder')
         # -- PARAMETERS --
-        self.declare_parameter('wall_distance', 1.5)
+        self.declare_parameter('wall_distance', 2.0)
         self.declare_parameter('body_velocity', 1.0)
         self.declare_parameter('angle_th', 60.0)
         

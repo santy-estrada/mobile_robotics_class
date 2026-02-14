@@ -15,7 +15,7 @@ class ControlNode(Node):
         self.declare_parameter('kd', 0.9)                    # Derivative gain for PD controller
         self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
         self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
-        self.declare_parameter('forward_velocity', 1.5)      # Constant forward velocity (m/s)
+        self.declare_parameter('forward_velocity', 2.0)      # Constant forward velocity (m/s)
         self.declare_parameter('brake_turn_angle', 1.0)
 
 
