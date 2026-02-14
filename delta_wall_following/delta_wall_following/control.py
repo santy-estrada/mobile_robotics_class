@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, TwistStamped
 import math
+from std_msgs.msg import Bool
 
 
 class ControlNode(Node):
@@ -10,23 +11,34 @@ class ControlNode(Node):
         super().__init__('control_node')
 
         # -- PARAMETERS --
-        self.declare_parameter('kp', 0.4)                    # Proportional gain for PD controller
-        self.declare_parameter('kd', 1.0)                    # Derivative gain for PD controller
-        self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
-        self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
+        self.declare_parameter('kp', 0.5)                    # Proportional gain for PD controller
+        self.declare_parameter('kd', 0.9)                    # Derivative gain for PD controller
+        self.declare_parameter('max_steering', 4.0)          # Max steering angle saturation (radians)
+        self.declare_parameter('min_steering', -4.0)         # Min steering angle saturation (radians)
         self.declare_parameter('forward_velocity', 1.0)      # Constant forward velocity (m/s)
+        self.declare_parameter('brake_turn_angle', 1.0)
+
 
         # Get parameters
-        self.kp = float(self.get_parameter('kp').value)
-        self.kd = float(self.get_parameter('kd').value)
+        self.kp = self.get_parameter('kp').value
+        self.kd = self.get_parameter('kd').value
+        self.forward_vel = self.get_parameter('forward_velocity').value
         self.max_steering = float(self.get_parameter('max_steering').value)
         self.min_steering = float(self.get_parameter('min_steering').value)
-        self.forward_vel = float(self.get_parameter('forward_velocity').value)
-
+        self.brake_turn_angle= float(self.get_parameter('brake_turn_angle').value)
         # State variables for derivative calculation
         self.prev_error = 0.0
         self.prev_time = None
-        self.steering_angle = 0.0
+        # Brake state
+        self.brake_active = False
+
+        # Subscription to brake state
+        self.brake_sub = self.create_subscription(
+            Bool,
+            '/brake_active',
+            self.brake_callback,
+            10
+        )
 
         # Subscription to error topic
         self.error_sub = self.create_subscription(
@@ -39,11 +51,14 @@ class ControlNode(Node):
         # Publisher for control commands
         self.cmd_pub = self.create_publisher(
             TwistStamped,
-            '/cmd_vel_ctrl',
+            '/cmd_vel_nav',
             10
         )
 
         self.get_logger().info('PD Control node initialized')
+
+    def brake_callback(self, msg: Bool):
+        self.brake_active = msg.data
 
     def error_callback(self, msg: Twist):
         """
@@ -86,20 +101,28 @@ class ControlNode(Node):
 
         # Calculate steering angle: steering = theta - theta_desired
         # (theta is the measured angular error alpha)
-        self.steering_angle = -theta_desired
-
+        # steering_angle = theta - theta_desired
+        steering_angle = -theta_desired
         # Apply saturation (min and max limits)
-        self.steering_angle = max(
+        steering_angle = max(
             self.min_steering,
-            min(self.max_steering, self.steering_angle)
+            min(self.max_steering, steering_angle)
         )
 
         # Create and publish command
         cmd = TwistStamped()
 
         # Set constant forward velocity and steering angle
-        cmd.twist.linear.x = self.forward_vel
-        cmd.twist.angular.z = self.steering_angle
+        
+        # Forward velocity blocked if brake is active
+        if self.brake_active:
+            cmd.twist.linear.x = self.forward_vel
+            cmd.twist.angular.z = self.brake_turn_angle  # Turn in place to the left when braking
+        else:
+            # cmd.twist.linear.x = self.forward_vel
+            cmd.twist.linear.x = self.forward_vel * math.exp(-self.kp * abs(error))
+            cmd.twist.angular.z = steering_angle
+        
 
         self.cmd_pub.publish(cmd)
 
@@ -108,7 +131,7 @@ class ControlNode(Node):
             f"y={y:.3f}m | L={L:.3f}m | alpha={math.degrees(theta):.1f}° | "
             f"e={error:.3f} | e'={error_rate:.3f} | "
             f"theta_desired={math.degrees(theta_desired):.1f}° | "
-            f"Steering={math.degrees(self.steering_angle):.1f}°"
+            f"Steering={math.degrees(steering_angle):.1f}°"
         )
 
 

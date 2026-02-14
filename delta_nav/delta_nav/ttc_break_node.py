@@ -4,6 +4,7 @@ from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import TwistStamped
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 import math
+from std_msgs.msg import Bool
 
 
 
@@ -12,10 +13,10 @@ class TTCBreakNode(Node):
         super().__init__('ttc_break_node')
         
         # ---- Parameters ----
-        self.declare_parameter('publish_rate', 115.0)           # Hz - rate to check TTC and publish commands
-        self.declare_parameter('ttc_threshold', 1.0)            # seconds - TTC threshold for emergency braking
+        self.declare_parameter('publish_rate', 100.0)           # Hz - rate to check TTC and publish commands
+        self.declare_parameter('ttc_threshold', 1.5)            # seconds - TTC threshold for emergency braking
         self.declare_parameter('min_distance_threshold', 0.5)   # meters - minimum distance to obstacle for braking
-        self.declare_parameter('forward_angle_range', 15.0)     # degrees - angle range in front of robot to consider
+        self.declare_parameter('forward_angle_range', 9.0)     # degrees - angle range in front of robot to consider
         self.declare_parameter('rear_angle_range', 10.0)        # degrees - angle range at rear of robot to consider
         self.declare_parameter('min_range', 0.1)                # meters - ignore measurements closer than this
         self.declare_parameter('max_range', 10.0)               # meters - ignore measurements farther than this
@@ -51,7 +52,10 @@ class TTCBreakNode(Node):
         self.create_subscription(TwistStamped, '/diffdrive_controller/cmd_vel', self._cmd_vel_callback, qos)
         
         # Publisher for safety-override velocity commands
-        self.cmd_ttc_publisher = self.create_publisher(TwistStamped, '/cmd_ttc', qos)
+        self.cmd_ttc_publisher = self.create_publisher(TwistStamped, '/cmd_vel_key', qos)
+         # Publisher for safety-override velocity commands
+        self.brake_pub = self.create_publisher(Bool, '/brake_active', 10)
+
         
         # ---- Timer ----
         # Timer to periodically check TTC and issue commands if needed
@@ -171,6 +175,11 @@ class TTCBreakNode(Node):
         self.should_brake = ((self.min_ttc < self.ttc_threshold and self.min_ttc != float('inf')) or 
                              (self.min_distance < self.min_distance_threshold))
         
+        # Publish brake state ALWAYS
+        brake_msg = Bool()
+        brake_msg.data = self.should_brake
+        self.brake_pub.publish(brake_msg)
+
         # Log state changes
         if self.should_brake != was_braking:
             if self.should_brake:
