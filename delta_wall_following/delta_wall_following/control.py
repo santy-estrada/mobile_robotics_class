@@ -56,7 +56,7 @@ class ControlNode(Node):
         )
 
         self.get_logger().info('PD Control node initialized')
-
+        
     def brake_callback(self, msg: Bool):
         self.brake_active = msg.data
 

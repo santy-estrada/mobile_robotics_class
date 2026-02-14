@@ -5,23 +5,20 @@ from geometry_msgs.msg import Twist, TwistStamped
 import math
 import numpy as np
 
-def getRange(ranges,th,angle_min,angle_increment):
-    # andulo a 90 grados del auto por la derecha
+def getRange(ranges, th, angle_min, angle_increment):
+    # ángulo a 90 grados del auto por la derecha
     theta_B = -math.pi / 2                 # -90°
     
     idx_B = int((theta_B - angle_min) / angle_increment)
     theta_A = theta_B + math.radians(th)
     idx_A = int((theta_A - angle_min) / angle_increment)
-    r_B=ranges[idx_B]
-    r_A=ranges[idx_A]
-    return r_B,r_A
-
+    r_B = ranges[idx_B]
+    r_A = ranges[idx_A]
+    return r_B, r_A
 
 class dist_finder(Node):
-
     def __init__(self):
         super().__init__('dist_finder')
-
         # -- PARAMETERS --
         self.declare_parameter('wall_distance', 0.5)
         self.declare_parameter('body_velocity', 1.0)
@@ -62,10 +59,9 @@ class dist_finder(Node):
             '/error',
             10
         )
-
-        self.get_logger().info('Nodo de segmentación láser iniciado')
+        self.get_logger().info('Nodo de seguimiento de muro iniciado')
         self.past_time = None
-
+    
     def _cmd_vel_callback(self, msg: TwistStamped):
         """Store the latest commanded velocity from the controller."""
         self.current_cmd_vel = msg
@@ -89,8 +85,8 @@ class dist_finder(Node):
         
         elapsed = (current_time - self.past_time).nanoseconds * 1e-9
         self.past_time = current_time
+        
         ranges = np.array(msg.ranges)
-        # clean the data a bit
         ranges = np.nan_to_num(ranges, nan=msg.range_max, posinf=msg.range_max)
         
         angulo = self.angle_th
