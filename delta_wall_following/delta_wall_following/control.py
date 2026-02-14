@@ -13,9 +13,9 @@ class ControlNode(Node):
         # -- PARAMETERS --
         self.declare_parameter('kp', 0.5)                    # Proportional gain for PD controller
         self.declare_parameter('kd', 0.9)                    # Derivative gain for PD controller
-        self.declare_parameter('max_steering', 4.0)          # Max steering angle saturation (radians)
-        self.declare_parameter('min_steering', -4.0)         # Min steering angle saturation (radians)
-        self.declare_parameter('forward_velocity', 1.0)      # Constant forward velocity (m/s)
+        self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
+        self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
+        self.declare_parameter('forward_velocity', 1.5)      # Constant forward velocity (m/s)
         self.declare_parameter('brake_turn_angle', 1.0)
 
 
@@ -56,7 +56,7 @@ class ControlNode(Node):
         )
 
         self.get_logger().info('PD Control node initialized')
-        
+
     def brake_callback(self, msg: Bool):
         self.brake_active = msg.data
 
@@ -86,7 +86,7 @@ class ControlNode(Node):
 
         # Composite error: e(t) = -(y + L*sin(theta))
         # This represents the predicted lateral deviation at the next step
-        error = -(y + L * math.sin(theta))
+        error = -(y)
 
         # Calculate error rate (derivative)
         if dt > 0:
