@@ -14,7 +14,7 @@ class TTCBreakNode(Node):
         
         # ---- Parameters ----
         self.declare_parameter('publish_rate', 100.0)           # Hz - rate to check TTC and publish commands
-        self.declare_parameter('ttc_threshold', 1.0)            # seconds - TTC threshold for emergency braking
+        self.declare_parameter('ttc_threshold', 0.7)            # seconds - TTC threshold for emergency braking
         self.declare_parameter('min_distance_threshold', 0.5)   # meters - minimum distance to obstacle for braking
         self.declare_parameter('forward_angle_range', 10.0)     # degrees - angle range in front of robot to consider
         self.declare_parameter('rear_angle_range', 10.0)        # degrees - angle range at rear of robot to consider

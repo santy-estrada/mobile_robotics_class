@@ -15,8 +15,8 @@ class ControlNode(Node):
         self.declare_parameter('kd', 0.9)                    # Derivative gain for PD controller
         self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
         self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
-        self.declare_parameter('forward_velocity', 2.0)      # Constant forward velocity (m/s)
-        self.declare_parameter('brake_turn_angle', 1.0)
+        self.declare_parameter('forward_velocity', 2.5)      # Constant forward velocity (m/s)
+        self.declare_parameter('brake_turn_angle', 1.3) #Puede ser 1.0 si fv = 2.0
 
 
         # Get parameters
@@ -122,8 +122,8 @@ class ControlNode(Node):
             cmd.twist.angular.z = self.brake_turn_angle  # Turn in place to the left when braking
         else:
             if wall_lost:
-                cmd.twist.linear.x = self.forward_vel * 0.5  # Move forward at half speed when wall is lost
-                cmd.twist.angular.z = -self.brake_turn_angle *0.5 # Turn in place to the left when wall is lost
+                cmd.twist.linear.x = self.forward_vel * 0.7  # Move forward at half speed when wall is lost
+                cmd.twist.angular.z = -self.brake_turn_angle *0.7 # Turn in place to the left when wall is lost
             else:
                 cmd.twist.linear.x = self.forward_vel * math.exp(-self.kp * abs(error))
                 cmd.twist.angular.z = steering_angle
