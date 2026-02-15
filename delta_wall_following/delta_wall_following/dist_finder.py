@@ -22,19 +22,16 @@ class dist_finder(Node):
         # -- PARAMETERS --
         self.declare_parameter('wall_distance', 2.0)
         self.declare_parameter('body_velocity', 1.0)
-        self.declare_parameter('angle_th', 60.0)
+        self.declare_parameter('angle_th', 50.0)
+        self.declare_parameter('max_discontinuity', 6.0)
         
         self.body_vel = float(self.get_parameter('body_velocity').value)
         self.desired_r = float(self.get_parameter('wall_distance').value)
+        self.max_discontinuity = float(self.get_parameter('max_discontinuity').value)
         self.angle_th = float(self.get_parameter('angle_th').value)
         
         self.current_cmd_vel = TwistStamped()
         
-        # Estado de búsqueda del muro
-        self.wall_lost = False
-        self.accumulated_search_error = 0.0
-        self.last_valid_error = 0.0
-        self.last_valid_alpha = 0.0
         
         self.subscription = self.create_subscription(
             LaserScan,
@@ -55,6 +52,17 @@ class dist_finder(Node):
         )
         self.get_logger().info('Nodo de seguimiento de muro iniciado')
         self.past_time = None
+
+    def is_valid_wall_reading(self, r_A, r_B):
+        """
+        Verifica si las lecturas de los rayos son válidas para seguimiento de muro.
+        Retorna (es_valido, tipo_problema)
+        """
+
+        if abs(r_A - r_B/math.cos(math.radians(self.angle_th))) > self.max_discontinuity:
+            return False, "discontinuidad"
+    
+        return True, None
     
     def _cmd_vel_callback(self, msg: TwistStamped):
         """Store the latest commanded velocity from the controller."""
@@ -75,29 +83,36 @@ class dist_finder(Node):
         angulo = self.angle_th
         r_B, r_A = getRange(ranges, angulo, msg.angle_min, msg.angle_increment)
 
-        
+        # Validar lecturas
+        is_valid, problem_type = self.is_valid_wall_reading(r_A, r_B)
+
         cmd = Twist()
         
+        if is_valid:
+            alpha = math.atan((r_A * math.cos(math.radians(angulo)) - r_B) / 
+                                (r_A * math.sin(math.radians(angulo))))
+            AB = r_B * math.cos(alpha)
+            AC = self.current_cmd_vel.twist.linear.x * elapsed
+            CD = AB + AC * math.sin(alpha)
+            error = self.desired_r - CD
+            
+            cmd.linear.x = error
+            cmd.linear.y = AC
+            cmd.angular.z = alpha
+            cmd.linear.z = 0.0  # Indicador de seguimiento normal
 
-        alpha = math.atan((r_A * math.cos(math.radians(angulo)) - r_B) / 
-                            (r_A * math.sin(math.radians(angulo))))
-        AB = r_B * math.cos(alpha)
-        AC = self.current_cmd_vel.twist.linear.x * elapsed
-        CD = AB + AC * math.sin(alpha)
-        error = self.desired_r - CD
-        
-        # Guardar valores válidos
-        self.last_valid_error = error
-        self.last_valid_alpha = alpha
-        
-        cmd.linear.x = error
-        cmd.linear.y = AC
-        cmd.angular.z = alpha
-        
-        self.get_logger().info(
+            self.get_logger().info(
             f"NORMAL | Error: {error:.3f}m | Alpha: {math.degrees(alpha):.1f}° | "
             f"CD: {CD:.3f}m | r_A: {r_A:.2f}m | r_B: {r_B:.2f}m"
         )
+
+        else:
+            cmd.linear.z = 1.0  # Indicador de búsqueda de muro
+            self.get_logger().info(
+                f"WALL LOST | Tipo de problema: {problem_type} | r_A - r_B/cos(th): {abs(r_A - r_B/math.cos(math.radians(self.angle_th))):.2f}m | "
+            )
+        
+
         
 
         

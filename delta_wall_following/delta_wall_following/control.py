@@ -84,6 +84,8 @@ class ControlNode(Node):
         L = msg.linear.y           # Distance travelled (AC)
         theta = msg.angular.z      # Angular error (alpha)
 
+        wall_lost = msg.linear.z == 1.0        
+
         # Composite error: e(t) = -(y + L*sin(theta))
         # This represents the predicted lateral deviation at the next step
         error = -(y)
@@ -119,9 +121,12 @@ class ControlNode(Node):
             cmd.twist.linear.x = self.forward_vel
             cmd.twist.angular.z = self.brake_turn_angle  # Turn in place to the left when braking
         else:
-            # cmd.twist.linear.x = self.forward_vel
-            cmd.twist.linear.x = self.forward_vel * math.exp(-self.kp * abs(error))
-            cmd.twist.angular.z = steering_angle
+            if wall_lost:
+                cmd.twist.linear.x = self.forward_vel * 0.5  # Move forward at half speed when wall is lost
+                cmd.twist.angular.z = -self.brake_turn_angle *0.5 # Turn in place to the left when wall is lost
+            else:
+                cmd.twist.linear.x = self.forward_vel * math.exp(-self.kp * abs(error))
+                cmd.twist.angular.z = steering_angle
         
 
         self.cmd_pub.publish(cmd)
