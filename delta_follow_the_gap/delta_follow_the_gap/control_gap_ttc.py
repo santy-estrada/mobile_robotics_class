@@ -12,8 +12,6 @@ class ControlNode(Node):
 
         # -- PARAMETERS --
         self.declare_parameter('kp', 1.0)                    # Proportional gain for PD controller
-        self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
-        self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
         self.declare_parameter('forward_velocity', 2.0)      # Constant forward velocity (m/s)
         self.declare_parameter('brake_turn_angle', 1.3) #Puede ser 1.0 si fv = 2.0
 
@@ -21,8 +19,6 @@ class ControlNode(Node):
         # Get parameters
         self.kp = self.get_parameter('kp').value
         self.forward_vel = self.get_parameter('forward_velocity').value
-        self.max_steering = float(self.get_parameter('max_steering').value)
-        self.min_steering = float(self.get_parameter('min_steering').value)
         self.brake_turn_angle= float(self.get_parameter('brake_turn_angle').value)
 
         # Brake state
@@ -75,7 +71,7 @@ class ControlNode(Node):
             )
             return
 
-        u = min(self.max_steering, max(self.min_steering, self.kp * theta))
+        u = self.kp * theta
 
         cmd.twist.linear.x = self.forward_vel
         cmd.twist.angular.z = u

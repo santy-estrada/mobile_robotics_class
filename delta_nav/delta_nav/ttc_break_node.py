@@ -175,10 +175,22 @@ class TTCBreakNode(Node):
         
         # Get the current forward velocity command
         cmd_linear_x = self.current_cmd_vel.twist.linear.x
-
         
-        # If robot is not commanded to move, no need to brake
+        # If robot is not moving, compute all TTC as inf and publish
         if cmd_linear_x == 0.0:
+            # Create array of inf values for all laser rays
+            directional_ttc_array = [float('inf')] * len(scan_msg.ranges)
+            # Add direction flag (0.0 for forward by default)
+            directional_ttc_array.append(0.0)
+            
+            ttc_msg = Float32MultiArray()
+            ttc_msg.data = directional_ttc_array
+            self.ttc_array_pub.publish(ttc_msg)
+            
+            # No brake needed when stopped
+            brake_msg = Bool()
+            brake_msg.data = False
+            self.brake_pub.publish(brake_msg)
             return
         
         # Process laser scan measurements

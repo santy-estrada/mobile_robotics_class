@@ -1,16 +1,16 @@
 <?xml version='1.0'?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ackerman_robot">
-    <xacro:property name="lx_box" value="${41/10}" /><!-- se aconseja definir porpiedades gemetricas con estas lineas -->
-    <xacro:property name="ly_box" value="${16/10}" />
-    <xacro:property name="lz_box" value="${13.3/10}" />
+    <xacro:property name="lx_box" value="${41/100}" /><!-- se aconseja definir porpiedades gemetricas con estas lineas -->
+    <xacro:property name="ly_box" value="${16/100}" />
+    <xacro:property name="lz_box" value="${13.3/100}" />
 
-    <xacro:property name="off_x" value="${12.55/10}" />
-    <xacro:property name="off_z" value="${5.45/10}" />
-    <xacro:property name="off_z_chasi" value="${6.65/10}" />
+    <xacro:property name="off_x" value="${12.55/100}" />
+    <xacro:property name="off_z" value="${5.45/100}" />
+    <xacro:property name="off_z_chasi" value="${6.65/100}" />
 
-    <xacro:property name="rad_cil" value="${10.2/2/10}" />
-    <xacro:property name="altura" value="${4.5/10}" />
-    <xacro:property name="off_y" value="${12.15/10}" />
+    <xacro:property name="rad_cil" value="${10.2/2/100}" />
+    <xacro:property name="altura" value="${4.5/100}" />
+    <xacro:property name="off_y" value="${12.15/100}" />
 
 
 
