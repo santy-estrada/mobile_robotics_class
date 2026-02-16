@@ -67,10 +67,8 @@ class TTCGapLoggerNode(Node):
 
         # Decide which set to use based on flag
         if abs(direction_flag - 0.0) < 1e-6:
-            motion = "ADELANTE"
             indices = forward_indices
         else:
-            motion = "ATRÁS"
             indices = backward_indices_ordered
 
         if len(indices) == 0:
@@ -125,8 +123,6 @@ class TTCGapLoggerNode(Node):
             angle_rad -= 2 * math.pi
         while angle_rad < -math.pi:
             angle_rad += 2 * math.pi
-
-        angle_deg = math.degrees(angle_rad)
 
         # Publish marker
         self._publish_gap_marker(angle_rad)

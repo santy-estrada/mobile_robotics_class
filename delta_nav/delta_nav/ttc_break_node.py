@@ -237,11 +237,11 @@ class TTCBreakNode(Node):
             scan_msg, cmd_linear_x
         )
          # Agregar valor extra según dirección de movimiento
-        if cmd_linear_x > 0.0:
+        if cmd_linear_x >= 0.0:
             directional_ttc_array.append(0.0)
         elif cmd_linear_x < 0.0:
             directional_ttc_array.append(1.0)
-        # Si cmd_linear_x == 0, no se agrega nada
+        # Si cmd_linear_x == 0, empieza hacia adelante
         ttc_msg = Float32MultiArray()
         ttc_msg.data = directional_ttc_array
         self.ttc_array_pub.publish(ttc_msg)

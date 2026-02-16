@@ -11,8 +11,7 @@ class ControlNode(Node):
         super().__init__('control_gap_ttc')
 
         # -- PARAMETERS --
-        self.declare_parameter('kp', 0.5)                    # Proportional gain for PD controller
-        self.declare_parameter('kd', 0.9)                    # Derivative gain for PD controller
+        self.declare_parameter('kp', 1.0)                    # Proportional gain for PD controller
         self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
         self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
         self.declare_parameter('forward_velocity', 2.0)      # Constant forward velocity (m/s)
@@ -21,14 +20,11 @@ class ControlNode(Node):
 
         # Get parameters
         self.kp = self.get_parameter('kp').value
-        self.kd = self.get_parameter('kd').value
         self.forward_vel = self.get_parameter('forward_velocity').value
         self.max_steering = float(self.get_parameter('max_steering').value)
         self.min_steering = float(self.get_parameter('min_steering').value)
         self.brake_turn_angle= float(self.get_parameter('brake_turn_angle').value)
-        # State variables for derivative calculation
-        self.prev_error = 0.0
-        self.prev_time = None
+
         # Brake state
         self.brake_active = False
 
@@ -55,7 +51,7 @@ class ControlNode(Node):
             10
         )
 
-        self.get_logger().info('PD Control node initialized')
+        self.get_logger().info('P Control node initialized')
 
     def brake_callback(self, msg: Bool):
         self.brake_active = msg.data
@@ -63,38 +59,33 @@ class ControlNode(Node):
     def error_callback(self, msg: Twist):
         """
         Callback for error messages from dist_finder.
-        
-        msg.linear.x: distance error from wall (y)
-        msg.linear.y: distance travelled since last callback (L or AC)
-        msg.angular.z: angular error / orientation angle (theta or alpha)
+        msg.angular.z: angular error
         """
-        current_time = self.get_clock().now()
-
-        if self.prev_time is None:
-            self.prev_time = current_time
-            self.prev_error = 0.0
-            return
-
-        # Calculate time step
-        dt = (current_time - self.prev_time).nanoseconds * 1e-9
-        self.prev_time = current_time
-
-        # Extract error components
-        y = msg.linear.x           # Distance error from wall
-        L = msg.linear.y           # Distance travelled (AC)
         theta =msg.angular.z     # Angular error (alpha)
         # Create and publish command
         cmd = TwistStamped()
 
-        cmd.twist.linear.x = self.forward_vel
-        cmd.twist.angular.z = theta  
+        if self.brake_active:
+            # If brake is active, set forward velocity to 0 and turn sharply
+            cmd.twist.linear.x = -0.7*self.forward_vel
+            cmd.twist.angular.z = self.brake_turn_angle if theta >= 0 else -self.brake_turn_angle
+            self.cmd_pub.publish(cmd)
+            self.get_logger().info(
+                f"Brake active! crr_env={theta} | cmd=0.0 linear, {cmd.twist.angular.z} angular"
+            )
+            return
 
+        u = min(self.max_steering, max(self.min_steering, self.kp * theta))
+
+        cmd.twist.linear.x = self.forward_vel
+        cmd.twist.angular.z = u
+  
 
         self.cmd_pub.publish(cmd)
 
         # Logging
         self.get_logger().info(
-            f"crr_env={theta} | "
+            f"crr_env={theta} | cmd={u}"
         )
 
 
