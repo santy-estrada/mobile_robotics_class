@@ -5,6 +5,7 @@ from geometry_msgs.msg import TwistStamped
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 import math
 from std_msgs.msg import Bool
+from std_msgs.msg import Float32MultiArray
 
 
 
@@ -19,7 +20,7 @@ class TTCBreakNode(Node):
         self.declare_parameter('forward_angle_range', 10.0)     # degrees - angle range in front of robot to consider
         self.declare_parameter('rear_angle_range', 10.0)        # degrees - angle range at rear of robot to consider
         self.declare_parameter('min_range', 0.1)                # meters - ignore measurements closer than this
-        self.declare_parameter('max_range', 10.0)               # meters - ignore measurements farther than this
+        self.declare_parameter('max_range', 6.0)               # meters - ignore measurements farther than this
         
         self.publish_rate = float(self.get_parameter('publish_rate').value)
         self.ttc_threshold = float(self.get_parameter('ttc_threshold').value)
@@ -56,6 +57,7 @@ class TTCBreakNode(Node):
          # Publisher for safety-override velocity commands
         self.brake_pub = self.create_publisher(Bool, '/brake_active', 10)
 
+        self.ttc_array_pub = self.create_publisher(Float32MultiArray, '/ttc_values', 10)
         
         # ---- Timer ----
         # Timer to periodically check TTC and issue commands if needed
@@ -102,10 +104,67 @@ class TTCBreakNode(Node):
         else:
             return float('inf')
     
+    def _compute_directional_ttc_array(self, scan_msg, cmd_linear_x):
+        """
+        Compute TTC for 180 degrees in the direction of motion.
+        - If moving forward: front 180° ([-90°, +90°])
+        - If moving backward: rear 180°
+        - All other rays: inf
+        Returns:
+            List of TTC values (same size as scan.ranges)
+        """
+
+        ttc_array = []
+
+        angle_min = scan_msg.angle_min
+        angle_increment = scan_msg.angle_increment
+
+            # Half plane = 180 degrees
+        half_plane_rad = math.pi / 2.0
+
+        is_moving_forward = cmd_linear_x > 0.0
+
+        for i, range_val in enumerate(scan_msg.ranges):
+
+                # Default value
+            ttc = float('inf')
+
+                # Skip invalid ranges
+            if not math.isfinite(range_val):
+                    ttc_array.append(ttc)
+                    continue
+
+            angle = angle_min + i * angle_increment
+
+                # Normalize angle to [-pi, pi]
+            while angle > math.pi:
+                angle -= 2 * math.pi
+            while angle < -math.pi:
+                angle += 2 * math.pi
+
+            if is_moving_forward:
+                    # Front 180° → [-90°, +90°]
+                in_direction = abs(angle) <= half_plane_rad
+            else:
+                    # Rear 180° → outside [-90°, +90°]
+                in_direction = abs(angle) >= half_plane_rad
+
+            if in_direction:
+                ttc = self._calculate_ttc_for_measurement(
+                    range_val, angle, cmd_linear_x
+                 )
+
+            ttc_array.append(float(ttc))
+
+        return ttc_array
+
+    
     def _check_ttc_and_publish(self):
         """
         Periodically check TTC for forward and rear obstacles and publish safety override if needed.
         """
+        scan_msg = self.last_laser_scan
+        ttc_array = []
         # Early exit if no recent laser scan data
         if self.last_laser_scan is None:
             return
@@ -137,6 +196,7 @@ class TTCBreakNode(Node):
         # Iterate through measurements
         for i, range_val in enumerate(scan_msg.ranges):
             # Skip invalid measurements (inf or nan)
+            ttc = float('inf')
             if not math.isfinite(range_val):
                 continue
             
@@ -168,7 +228,32 @@ class TTCBreakNode(Node):
                 # Track minimum distance
                 if range_val < self.min_distance:
                     self.min_distance = range_val
-        
+
+            # Append TTC for this ray (inf if not relevant or invalid)
+            ttc_array.append(float(ttc))
+            
+        # Compute full directional TTC array (180° depending on motion)
+        directional_ttc_array = self._compute_directional_ttc_array(
+            scan_msg, cmd_linear_x
+        )
+         # Agregar valor extra según dirección de movimiento
+        if cmd_linear_x > 0.0:
+            directional_ttc_array.append(0.0)
+        elif cmd_linear_x < 0.0:
+            directional_ttc_array.append(1.0)
+        # Si cmd_linear_x == 0, no se agrega nada
+        ttc_msg = Float32MultiArray()
+        ttc_msg.data = directional_ttc_array
+        self.ttc_array_pub.publish(ttc_msg)
+        total_values = len(ttc_msg.data)
+        finite_values = sum(1 for v in ttc_msg.data if math.isfinite(v))
+
+        self.get_logger().info(
+            f"TTC array size: {total_values} | Finite TTC values: {finite_values}"
+        )
+
+
+
         # Determine if we should brake
         was_braking = self.should_brake
         # Brake if TTC is below threshold OR if any obstacle is too close (within min_distance_threshold)

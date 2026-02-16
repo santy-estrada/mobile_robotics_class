@@ -23,3 +23,7 @@ twist_mux:
         topic   : cmd_vel_ctrl
         timeout : 0.5
         priority: 5
+      follow__the_gap:
+        topic   : cmd_vel_ttc_gap
+        timeout : 0.5
+        priority: 5
