@@ -17,7 +17,8 @@ class ControlNode(Node):
         self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
         self.declare_parameter('forward_velocity', 2.5)      # Constant forward velocity (m/s)
         self.declare_parameter('brake_turn_angle', 1.3) #Puede ser 1.0 si fv = 2.0
-
+        self.declare_parameter('start_flag', False)               #Flag to signal that the car has received its first forward input from Joystickz
+        self.declare_parameter('pub_logger', True)               #Flag to signal whether to publish error values for logging in ttc_gap_logger_node
 
         # Get parameters
         self.kp = self.get_parameter('kp').value
@@ -26,6 +27,9 @@ class ControlNode(Node):
         self.max_steering = float(self.get_parameter('max_steering').value)
         self.min_steering = float(self.get_parameter('min_steering').value)
         self.brake_turn_angle= float(self.get_parameter('brake_turn_angle').value)
+        self.start_flag = bool(self.get_parameter('start_flag').value)
+        self.pub_logger = bool(self.get_parameter('pub_logger').value)
+
         # State variables for derivative calculation
         self.prev_error = 0.0
         self.prev_time = None
@@ -48,6 +52,14 @@ class ControlNode(Node):
             10
         )
 
+        # Subscription to start topic
+        self.start_sub = self.create_subscription(
+            Bool,
+            '/start',
+            self.start_callback,
+            10
+        )
+
         # Publisher for control commands
         self.cmd_pub = self.create_publisher(
             TwistStamped,
@@ -60,6 +72,11 @@ class ControlNode(Node):
     def brake_callback(self, msg: Bool):
         self.brake_active = msg.data
 
+    def start_callback(self, msg: Bool):
+        if msg.data:
+            self.get_logger().info("Received start signal. Starting control.")
+            self.start_flag = True
+
     def error_callback(self, msg: Twist):
         """
         Callback for error messages from dist_finder.
@@ -68,6 +85,11 @@ class ControlNode(Node):
         msg.linear.y: distance travelled since last callback (L or AC)
         msg.angular.z: angular error / orientation angle (theta or alpha)
         """
+
+        if not self.start_flag:
+            self.get_logger().info("Controller not started yet. Ignoring error messages.")
+            return
+        
         current_time = self.get_clock().now()
 
         if self.prev_time is None:
@@ -132,12 +154,13 @@ class ControlNode(Node):
         self.cmd_pub.publish(cmd)
 
         # Logging
-        self.get_logger().info(
-            f"y={y:.3f}m | L={L:.3f}m | alpha={math.degrees(theta):.1f}° | "
-            f"e={error:.3f} | e'={error_rate:.3f} | "
-            f"theta_desired={math.degrees(theta_desired):.1f}° | "
-            f"Steering={math.degrees(steering_angle):.1f}°"
-        )
+        if self.pub_logger:
+            self.get_logger().info(
+                f"y={y:.3f}m | L={L:.3f}m | alpha={math.degrees(theta):.1f}° | "
+                f"e={error:.3f} | e'={error_rate:.3f} | "
+                f"theta_desired={math.degrees(theta_desired):.1f}° | "
+                f"Steering={math.degrees(steering_angle):.1f}°"
+            )
 
 
 def main(args=None):

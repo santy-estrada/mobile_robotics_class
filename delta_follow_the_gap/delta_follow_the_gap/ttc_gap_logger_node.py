@@ -11,6 +11,9 @@ class TTCGapLoggerNode(Node):
     def __init__(self):
         super().__init__('ttc_gap_logger_node')
 
+        self.declare_parameter('pub_logger', True)      #Flag to pub logger info
+
+        self.pub_logger = bool(self.get_parameter('pub_logger').value)
         self.last_scan = None
 
         self.create_subscription(LaserScan, '/scan', self._scan_callback, 10)
@@ -130,10 +133,11 @@ class TTCGapLoggerNode(Node):
         cmd_ang.angular.z=angle_rad
         self.ang_err_pub.publish(cmd_ang)
         # Log only what you asked (size + center angle + motion)
-        self.get_logger().info(
-            #f"Gap más grande: tamaño={largest_len} | centro={angle_deg:.2f}° | movimiento={motion}"
-            f"flag: {direction_flag} "
-        )
+        if self.pub_logger:
+            self.get_logger().info(
+                #f"Gap más grande: tamaño={largest_len} | centro={angle_deg:.2f}° | movimiento={motion}"
+                f"flag: {direction_flag} "
+            )
 
     def _publish_gap_marker(self, angle_rad):
         marker = Marker()

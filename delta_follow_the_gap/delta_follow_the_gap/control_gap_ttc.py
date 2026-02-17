@@ -14,12 +14,15 @@ class ControlNode(Node):
         self.declare_parameter('kp', 1.0)                    # Proportional gain for PD controller
         self.declare_parameter('forward_velocity', 2.0)      # Constant forward velocity (m/s)
         self.declare_parameter('brake_turn_angle', 1.3) #Puede ser 1.0 si fv = 2.0
-
+        self.declare_parameter('start_flag', False)               #Flag to signal that the car has received its first forward input from Joystickz
+        self.declare_parameter('pub_logger', True)      #Flag to pub logger info
 
         # Get parameters
         self.kp = self.get_parameter('kp').value
         self.forward_vel = self.get_parameter('forward_velocity').value
         self.brake_turn_angle= float(self.get_parameter('brake_turn_angle').value)
+        self.start_flag = bool(self.get_parameter('start_flag').value)
+        self.pub_logger = bool(self.get_parameter('pub_logger').value)
 
         # Brake state
         self.brake_active = False
@@ -40,6 +43,14 @@ class ControlNode(Node):
             10
         )
 
+        #Subscription to start topic
+        self.start_sub = self.create_subscription(
+            Bool,
+            '/start',
+            self.start_callback,
+            10
+        )
+
         # Publisher for control commands
         self.cmd_pub = self.create_publisher(
             TwistStamped,
@@ -52,23 +63,37 @@ class ControlNode(Node):
     def brake_callback(self, msg: Bool):
         self.brake_active = msg.data
 
+    def start_callback(self, msg: Bool):
+        if msg.data:
+            self.get_logger().info("Received start signal. Starting control.")
+            self.start_flag = True
+        
+
+
     def error_callback(self, msg: Twist):
         """
         Callback for error messages from dist_finder.
         msg.angular.z: angular error
         """
+
+        if not self.start_flag:
+            self.get_logger().info("Controller not started yet. Ignoring error messages.")
+            return
+        
         theta =msg.angular.z     # Angular error (alpha)
         # Create and publish command
         cmd = TwistStamped()
 
         if self.brake_active:
-            # If brake is active, set forward velocity to 0 and turn sharply
-            cmd.twist.linear.x = -0.7*self.forward_vel
+            # If brake is active, turn
+            cmd.twist.linear.x = 0.1
             cmd.twist.angular.z = self.brake_turn_angle if theta >= 0 else -self.brake_turn_angle
             self.cmd_pub.publish(cmd)
-            self.get_logger().info(
-                f"Brake active! crr_env={theta} | cmd=0.0 linear, {cmd.twist.angular.z} angular"
-            )
+
+            if self.pub_logger:
+                self.get_logger().info(
+                    f"Brake active! crr_env={theta} | cmd=0.0 linear, {cmd.twist.angular.z} angular"
+                )
             return
 
         u = self.kp * theta
@@ -80,9 +105,10 @@ class ControlNode(Node):
         self.cmd_pub.publish(cmd)
 
         # Logging
-        self.get_logger().info(
-            f"crr_env={theta} | cmd={u}"
-        )
+        if self.pub_logger:
+            self.get_logger().info(
+                f"crr_env={theta} | cmd={u}"
+            )
 
 
 def main(args=None):

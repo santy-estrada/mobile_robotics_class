@@ -24,11 +24,13 @@ class dist_finder(Node):
         self.declare_parameter('body_velocity', 1.0)
         self.declare_parameter('angle_th', 50.0)
         self.declare_parameter('max_discontinuity', 6.0)
+        self.declare_parameter('pub_logger', True)      #Flag to pub logger info
         
         self.body_vel = float(self.get_parameter('body_velocity').value)
         self.desired_r = float(self.get_parameter('wall_distance').value)
         self.max_discontinuity = float(self.get_parameter('max_discontinuity').value)
         self.angle_th = float(self.get_parameter('angle_th').value)
+        self.pub_logger = bool(self.get_parameter('pub_logger').value)
         
         self.current_cmd_vel = TwistStamped()
         
@@ -101,16 +103,18 @@ class dist_finder(Node):
             cmd.angular.z = alpha
             cmd.linear.z = 0.0  # Indicador de seguimiento normal
 
-            self.get_logger().info(
-            f"NORMAL | Error: {error:.3f}m | Alpha: {math.degrees(alpha):.1f}° | "
-            f"CD: {CD:.3f}m | r_A: {r_A:.2f}m | r_B: {r_B:.2f}m"
+            if self.pub_logger:
+                self.get_logger().info(
+                f"NORMAL | Error: {error:.3f}m | Alpha: {math.degrees(alpha):.1f}° | "
+                f"CD: {CD:.3f}m | r_A: {r_A:.2f}m | r_B: {r_B:.2f}m"
         )
 
         else:
             cmd.linear.z = 1.0  # Indicador de búsqueda de muro
-            self.get_logger().info(
-                f"WALL LOST | Tipo de problema: {problem_type} | r_A - r_B/cos(th): {abs(r_A - r_B/math.cos(math.radians(self.angle_th))):.2f}m | "
-            )
+            if self.pub_logger:
+                self.get_logger().info(
+                    f"WALL LOST | Tipo de problema: {problem_type} | r_A - r_B/cos(th): {abs(r_A - r_B/math.cos(math.radians(self.angle_th))):.2f}m | "
+                )
         
 
         

@@ -189,7 +189,7 @@ class TTCBreakNode(Node):
             
             # No brake needed when stopped
             brake_msg = Bool()
-            brake_msg.data = False
+            brake_msg.data = True
             self.brake_pub.publish(brake_msg)
             return
         
@@ -260,9 +260,9 @@ class TTCBreakNode(Node):
         total_values = len(ttc_msg.data)
         finite_values = sum(1 for v in ttc_msg.data if math.isfinite(v))
 
-        self.get_logger().info(
-            f"TTC array size: {total_values} | Finite TTC values: {finite_values}"
-        )
+        # self.get_logger().info(
+        #     f"TTC array size: {total_values} | Finite TTC values: {finite_values}"
+        # )
 
 
 
