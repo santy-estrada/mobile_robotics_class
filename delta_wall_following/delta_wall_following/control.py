@@ -17,7 +17,7 @@ class ControlNode(Node):
         self.declare_parameter('k_fwd', 0.3)                  # Forward velocity gain based on error magnitude
         self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
         self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
-        self.declare_parameter('forward_velocity', 1.5)      # Constant forward velocity (m/s)
+        self.declare_parameter('forward_velocity', 1.3)      # Constant forward velocity (m/s)
         self.declare_parameter('brake_turn_angle', 1.3) #Puede ser 1.0 si fv = 2.0
         self.declare_parameter('start_flag', False)               #Flag to signal that the car has received its first forward input from Joystickz
         self.declare_parameter('pub_logger', True)               #Flag to signal whether to publish error values for logging in ttc_gap_logger_node
