@@ -59,8 +59,7 @@ class TTCGapLoggerNode(Node):
         ]
 
         clearance_measure = [ttc[i] for i in indices_clearance]
-
-
+        perpe_measure=ttc[181]
         N = len(ttc)
         angle_min = self.last_scan.angle_min
         angle_inc = self.last_scan.angle_increment
@@ -154,8 +153,12 @@ class TTCGapLoggerNode(Node):
             angle_rad = -1.4 * angle_rad
             mark_alert = 1.0
         if angle_rad < 0 and clearance_measure[2] < 0.8:
-            angle_rad = 1.9 * angle_rad
+            angle_rad = 1.5 * angle_rad
             mark_alert = 1.0
+        if perpe_measure < 11.0:
+            angle_rad = 1.4*abs(angle_rad)
+            mark_alert = 1.0
+        
 
         cmd_ang.angular.z = angle_rad
         cmd_ang.angular.y = mark_alert
@@ -163,7 +166,7 @@ class TTCGapLoggerNode(Node):
         
         # Logging
         if self.pub_logger:
-            self.get_logger().info(f"clearances: {clearance_measure[1]} ")
+            self.get_logger().info(f"clearances: {perpe_measure} ")
 
     def _publish_gap_marker(self, angle_rad):
         marker = Marker()

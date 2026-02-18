@@ -55,7 +55,7 @@ def generate_launch_description():
         arguments=[
             "-name", "diffbot",
             "-topic", "robot_description",
-            "-x", "4.60", "-y", "17.56", "-z", "3.0",
+            "-x", "-18.44", "-y", "4.29", "-z", "3.0", "-R", "0.0", "-P", "0.0", "-Y", "1.57"
         ],
     )
 
