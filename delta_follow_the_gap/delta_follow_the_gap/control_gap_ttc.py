@@ -11,27 +11,36 @@ class ControlNode(Node):
         super().__init__('control_gap_ttc')
 
         # -- PARAMETERS --
-        self.declare_parameter('kp', 1.0)                    # Proportional gain for PD controller
+        self.declare_parameter('kp', 0.5)                    # Proportional gain for PD controller
+        self.declare_parameter('kd', 0.9)                    # Derivative gain for PD controller
+        self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
+        self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
         self.declare_parameter('forward_velocity', 2.0)      # Constant forward velocity (m/s)
         self.declare_parameter('brake_turn_angle', 1.3) #Puede ser 1.0 si fv = 2.0
         self.declare_parameter('start_flag', False)               #Flag to signal that the car has received its first forward input from Joystickz
-        self.declare_parameter('pub_logger', True)      #Flag to pub logger info
+        self.declare_parameter('pub_logger', True)               #Flag to signal whether to publish error values for logging in ttc_gap_logger_node
+        
+
 
         # Get parameters
         self.kp = self.get_parameter('kp').value
+        self.kd = self.get_parameter('kd').value
         self.forward_vel = self.get_parameter('forward_velocity').value
+        self.max_steering = float(self.get_parameter('max_steering').value)
+        self.min_steering = float(self.get_parameter('min_steering').value)
         self.brake_turn_angle= float(self.get_parameter('brake_turn_angle').value)
+        # State variables for derivative calculation
+        self.prev_error = 0.0
+        self.prev_time = None
+        # Brake state
         self.start_flag = bool(self.get_parameter('start_flag').value)
         self.pub_logger = bool(self.get_parameter('pub_logger').value)
 
-        # Brake state
-        self.brake_active = False
-
         # Subscription to brake state
-        self.brake_sub = self.create_subscription(
+        self.start_sub = self.create_subscription(
             Bool,
-            '/brake_active',
-            self.brake_callback,
+            '/start',
+            self.start_callback,
             10
         )
 
@@ -43,14 +52,6 @@ class ControlNode(Node):
             10
         )
 
-        #Subscription to start topic
-        self.start_sub = self.create_subscription(
-            Bool,
-            '/start',
-            self.start_callback,
-            10
-        )
-
         # Publisher for control commands
         self.cmd_pub = self.create_publisher(
             TwistStamped,
@@ -58,56 +59,58 @@ class ControlNode(Node):
             10
         )
 
-        self.get_logger().info('P Control node initialized')
-
-    def brake_callback(self, msg: Bool):
-        self.brake_active = msg.data
+        self.get_logger().info('PD Control node initialized')
 
     def start_callback(self, msg: Bool):
         if msg.data:
             self.get_logger().info("Received start signal. Starting control.")
             self.start_flag = True
-        
-
 
     def error_callback(self, msg: Twist):
         """
         Callback for error messages from dist_finder.
-        msg.angular.z: angular error
+        
+        msg.linear.x: distance error from wall (y)
+        msg.linear.y: distance travelled since last callback (L or AC)
+        msg.angular.z: angular error / orientation angle (theta or alpha)
         """
 
         if not self.start_flag:
             self.get_logger().info("Controller not started yet. Ignoring error messages.")
             return
-        
-        theta =msg.angular.z     # Angular error (alpha)
-        # Create and publish command
-        cmd = TwistStamped()
+    
+        current_time = self.get_clock().now()
 
-        if self.brake_active:
-            # If brake is active, turn
-            cmd.twist.linear.x = 0.1
-            cmd.twist.angular.z = self.brake_turn_angle if theta >= 0 else -self.brake_turn_angle
-            self.cmd_pub.publish(cmd)
-
-            if self.pub_logger:
-                self.get_logger().info(
-                    f"Brake active! crr_env={theta} | cmd=0.0 linear, {cmd.twist.angular.z} angular"
-                )
+        if self.prev_time is None:
+            self.prev_time = current_time
+            self.prev_error = 0.0
             return
 
-        u = self.kp * theta
+        # Calculate time step
+        dt = (current_time - self.prev_time).nanoseconds * 1e-9
+        self.prev_time = current_time
 
-        cmd.twist.linear.x = self.forward_vel
-        cmd.twist.angular.z = u
-  
+        # Extract error components
+        y = msg.linear.x           # Distance error from wall
+        L = msg.linear.y           # Distance travelled (AC)
+        theta =msg.angular.z     # Angular error (alpha)
+        alertado=msg.angular.y 
+        # Create and publish command
+        cmd = TwistStamped()
+        if alertado == 1.0:
+            cmd.twist.linear.x = 0.8*self.forward_vel
+            cmd.twist.angular.z = 1.7*theta  
+        else:
+            cmd.twist.linear.x = 1.3*self.forward_vel
+            cmd.twist.angular.z = 1.7*theta  
+
 
         self.cmd_pub.publish(cmd)
 
         # Logging
         if self.pub_logger:
             self.get_logger().info(
-                f"crr_env={theta} | cmd={u}"
+                f"crr_env={theta} | "
             )
 
 

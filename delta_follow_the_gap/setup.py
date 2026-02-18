@@ -29,6 +29,7 @@ setup(
         'console_scripts': [
             'control_gap_ttc = delta_follow_the_gap.control_gap_ttc:main',
             'ttc_gap_logger_node = delta_follow_the_gap.ttc_gap_logger_node:main',
+            'ttc_break_gap_node = delta_follow_the_gap.ttc_break_gap_node:main',
         ],
     },
 )
