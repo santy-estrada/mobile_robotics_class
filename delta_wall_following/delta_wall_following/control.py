@@ -14,10 +14,10 @@ class ControlNode(Node):
         # -- PARAMETERS --
         self.declare_parameter('kp', 0.6)                    # Proportional gain for PD controller
         self.declare_parameter('kd', 0.9)                    # Derivative gain for PD controller
-        self.declare_parameter('k_fwd', 0.25)                  # Forward velocity gain based on error magnitude
+        self.declare_parameter('k_fwd', 0.4)                  # Forward velocity gain based on error magnitude
         self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
         self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
-        self.declare_parameter('forward_velocity', 1.4)      # Constant forward velocity (m/s)
+        self.declare_parameter('forward_velocity', 2.0)      # Constant forward velocity (m/s)
         self.declare_parameter('brake_turn_angle', 1.3) #Puede ser 1.0 si fv = 2.0
         self.declare_parameter('start_flag', False)               #Flag to signal that the car has received its first forward input from Joystickz
         self.declare_parameter('pub_logger', True)               #Flag to signal whether to publish error values for logging in ttc_gap_logger_node
@@ -205,10 +205,10 @@ class ControlNode(Node):
         # Forward velocity blocked if brake is active
         if self.brake_active:
             cmd.twist.linear.x = self.forward_vel
-            cmd.twist.angular.z = -self.brake_turn_angle  # Turn in place to the right when braking
+            cmd.twist.angular.z = self.brake_turn_angle  # Turn in place to the right when braking
         else:
             if wall_lost:
-                cmd.twist.linear.x = self.forward_vel * 0.25  # Move forward at half speed when wall is lost
+                cmd.twist.linear.x = self.forward_vel * 0.8  # Move forward at half speed when wall is lost
                 cmd.twist.angular.z = -self.brake_turn_angle *self.wall_lost_angular_vel_gain # Turn in place to the left when wall is lost
             else:
                 if self.front_wall_turn_bias == 0.0 and error < 0.1:

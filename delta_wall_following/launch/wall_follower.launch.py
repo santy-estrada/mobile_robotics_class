@@ -16,9 +16,9 @@ def generate_launch_description():
         executable="dist_finder",
         output="screen",
         parameters=[
-            {"wall_distance": 1.5},
+            {"wall_distance": 0.6},
             {"angle_th": 50.0},
-            {"max_discontinuity": 6.0},
+            {"max_discontinuity": 2.5},
             {"pub_logger": False},      #Flag to pub logger info
         ]
     )
@@ -28,12 +28,12 @@ def generate_launch_description():
         executable="control",
         output="screen",
         parameters=[
-            {"forward_velocity": 3.2},
+            {"forward_velocity": 3.0},
             {'brake_turn_angle': 1.3},
             {"pub_logger": False},      #Flag to pub logger info
-            {"front_wall_gain": 0.9},           # Gain for predictive turn correction when front wall detected
-            {"front_wall_ttc_threshold": 3.6},  # TTC threshold below which to start turning (seconds)
-            {"wall_lost_forward_vel": 1.1},    # Angular velocity multiplier when wall is lost
+            {"front_wall_gain": 0.8},           # Gain for predictive turn correction when front wall detected
+            {"front_wall_ttc_threshold": 2.8},  # TTC threshold below which to start turning (seconds)
+            {"wall_lost_angular_vel_gain": 0.9},    # Angular velocity multiplier when wall is lost
         ]
     )
 
@@ -42,7 +42,7 @@ def generate_launch_description():
         executable="ttc_break_node",
         output="screen",
         parameters=[
-            {"ttc_threshold": 0.7},            # seconds - TTC threshold for emergency braking
+            {"ttc_threshold": 0.55},            # seconds - TTC threshold for emergency braking
             {"min_distance_threshold": 0.5},   # meters - minimum distance to obstacle for braking
             {"forward_angle_range": 10.0},     # degrees - angle range in front of robot to consider
             {"max_range": 12.0},                # meters - maximum range of the sensor

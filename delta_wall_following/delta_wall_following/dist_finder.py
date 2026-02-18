@@ -20,10 +20,10 @@ class dist_finder(Node):
     def __init__(self):
         super().__init__('dist_finder')
         # -- PARAMETERS --
-        self.declare_parameter('wall_distance', 0.8)
+        self.declare_parameter('wall_distance', 0.6)
         self.declare_parameter('body_velocity', 1.0)
-        self.declare_parameter('angle_th', 60.0)
-        self.declare_parameter('max_discontinuity', 5.0)
+        self.declare_parameter('angle_th', 50.0)
+        self.declare_parameter('max_discontinuity', 2.5)
         self.declare_parameter('pub_logger', True)      #Flag to pub logger info
         
         self.body_vel = float(self.get_parameter('body_velocity').value)
