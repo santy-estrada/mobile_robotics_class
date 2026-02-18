@@ -155,9 +155,10 @@ class TTCGapLoggerNode(Node):
         if angle_rad < 0 and clearance_measure[2] < 0.8:
             angle_rad = 1.5 * angle_rad
             mark_alert = 1.0
-        if perpe_measure < 11.0:
-            angle_rad = 1.4*abs(angle_rad)
+        if angle_rad < 0 and clearance_measure[1] < 1.0:
+            angle_rad = -2.0 * angle_rad
             mark_alert = 1.0
+
         
 
         cmd_ang.angular.z = angle_rad
