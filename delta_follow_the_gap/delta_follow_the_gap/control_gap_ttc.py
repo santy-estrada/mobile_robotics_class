@@ -74,7 +74,7 @@ class ControlNode(Node):
             cmd.twist.linear.x = 0.8 * self.forward_vel
             cmd.twist.angular.z = 1.7 * theta
         else:
-            cmd.twist.linear.x = 1.3 * self.forward_vel
+            cmd.twist.linear.x = 1.1 * self.forward_vel
             cmd.twist.angular.z = 1.7 * theta
 
         self.cmd_pub.publish(cmd)
