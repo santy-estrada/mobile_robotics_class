@@ -23,24 +23,14 @@ def generate_launch_description():
     control = Node(
         package="delta_follow_the_gap",
         executable="control_gap_ttc",
-        output="screen",
-        parameters=[
-            {"forward_velocity": 2.5},
-            {'brake_turn_angle': 1.3},
-            {"pub_logger": False},      #Flag to pub logger info
-        ]
+        output="screen"
+
     )
 
     aebs = Node(
         package="delta_nav",
         executable="ttc_break_node",
         output="screen",
-        parameters=[
-            {"ttc_threshold": 0.4},            # seconds - TTC threshold for emergency braking
-            {"min_distance_threshold": 0.5},   # meters - minimum distance to obstacle for braking
-            {"forward_angle_range": 10.0},     # degrees - angle range in front of robot to consider
-            {"max_range": 6.0},                # meters - maximum range of the sensor
-        ]
     )
 
    

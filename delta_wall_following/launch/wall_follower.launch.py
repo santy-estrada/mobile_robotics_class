@@ -16,7 +16,7 @@ def generate_launch_description():
         executable="dist_finder",
         output="screen",
         parameters=[
-            {"wall_distance": 0.6},
+            {"wall_distance": 0.5},
             {"angle_th": 50.0},
             {"max_discontinuity": 2.5},
             {"pub_logger": False},      #Flag to pub logger info
@@ -28,7 +28,7 @@ def generate_launch_description():
         executable="control",
         output="screen",
         parameters=[
-            {"forward_velocity": 3.0},
+            {"forward_velocity": 3.1},
             {'brake_turn_angle': 1.3},
             {"pub_logger": False},      #Flag to pub logger info
             {"front_wall_gain": 0.8},           # Gain for predictive turn correction when front wall detected
