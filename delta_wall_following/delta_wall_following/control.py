@@ -14,7 +14,7 @@ class ControlNode(Node):
         # -- PARAMETERS --
         self.declare_parameter('kp', 0.6)                    # Proportional gain for PD controller
         self.declare_parameter('kd', 0.9)                    # Derivative gain for PD controller
-        self.declare_parameter('k_fwd', 0.3)                  # Forward velocity gain based on error magnitude
+        self.declare_parameter('k_fwd', 0.25)                  # Forward velocity gain based on error magnitude
         self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
         self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
         self.declare_parameter('forward_velocity', 1.3)      # Constant forward velocity (m/s)
