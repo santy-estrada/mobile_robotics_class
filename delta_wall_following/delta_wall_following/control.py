@@ -12,21 +12,23 @@ class ControlNode(Node):
         super().__init__('control_node')
 
         # -- PARAMETERS --
-        self.declare_parameter('kp', 0.5)                    # Proportional gain for PD controller
+        self.declare_parameter('kp', 0.6)                    # Proportional gain for PD controller
         self.declare_parameter('kd', 0.9)                    # Derivative gain for PD controller
+        self.declare_parameter('k_fwd', 0.3)                  # Forward velocity gain based on error magnitude
         self.declare_parameter('max_steering', math.radians(60))          # Max steering angle saturation (radians)
         self.declare_parameter('min_steering', math.radians(-60))         # Min steering angle saturation (radians)
-        self.declare_parameter('forward_velocity', 3.0)      # Constant forward velocity (m/s)
+        self.declare_parameter('forward_velocity', 1.5)      # Constant forward velocity (m/s)
         self.declare_parameter('brake_turn_angle', 1.3) #Puede ser 1.0 si fv = 2.0
         self.declare_parameter('start_flag', False)               #Flag to signal that the car has received its first forward input from Joystickz
         self.declare_parameter('pub_logger', True)               #Flag to signal whether to publish error values for logging in ttc_gap_logger_node
-        self.declare_parameter('front_wall_gain', 0.7)           # Gain for predictive turn correction when front wall detected
-        self.declare_parameter('front_wall_ttc_threshold', 3.0)  # TTC threshold below which to start turning (seconds)
-        self.declare_parameter('wall_lost_forward_vel', 1.0)    # Angular velocity multiplier when wall is lost
+        self.declare_parameter('front_wall_gain', 0.8)           # Gain for predictive turn correction when front wall detected
+        self.declare_parameter('front_wall_ttc_threshold', 2.8)  # TTC threshold below which to start turning (seconds)
+        self.declare_parameter('wall_lost_angular_vel_gain', 0.9)    # Angular velocity multiplier when wall is lost
 
         # Get parameters
         self.kp = self.get_parameter('kp').value
         self.kd = self.get_parameter('kd').value
+        self.k_fwd = self.get_parameter('k_fwd').value
         self.forward_vel = self.get_parameter('forward_velocity').value
         self.max_steering = float(self.get_parameter('max_steering').value)
         self.min_steering = float(self.get_parameter('min_steering').value)
@@ -35,7 +37,7 @@ class ControlNode(Node):
         self.pub_logger = bool(self.get_parameter('pub_logger').value)
         self.front_wall_gain = float(self.get_parameter('front_wall_gain').value)
         self.front_wall_ttc_threshold = float(self.get_parameter('front_wall_ttc_threshold').value)
-        self.wall_lost_forward_vel = float(self.get_parameter('wall_lost_forward_vel').value)
+        self.wall_lost_angular_vel_gain = float(self.get_parameter('wall_lost_angular_vel_gain').value)
         # State variables for derivative calculation
         self.prev_error = 0.0
         self.prev_time = None
@@ -120,7 +122,7 @@ class ControlNode(Node):
                 turn_intensity = (self.front_wall_ttc_threshold / m_ttc) - 1.0
                 
                 # Cap intensity to prevent extreme values when very close
-                turn_intensity = min(turn_intensity, 5.0)
+                turn_intensity = min(turn_intensity, 10.0)
                 
                 self.front_wall_turn_bias = self.front_wall_gain * turn_intensity * self.max_steering
             else:
@@ -206,10 +208,14 @@ class ControlNode(Node):
             cmd.twist.angular.z = self.brake_turn_angle  # Turn in place to the left when braking
         else:
             if wall_lost:
-                cmd.twist.linear.x = self.forward_vel * 0.7  # Move forward at half speed when wall is lost
-                cmd.twist.angular.z = -self.brake_turn_angle *self.wall_lost_forward_vel # Turn in place to the left when wall is lost
+                cmd.twist.linear.x = self.forward_vel * 0.25  # Move forward at half speed when wall is lost
+                cmd.twist.angular.z = -self.brake_turn_angle *self.wall_lost_angular_vel_gain # Turn in place to the left when wall is lost
             else:
-                cmd.twist.linear.x = self.forward_vel * math.exp(-self.kp * abs(error))
+                if self.front_wall_turn_bias == 0.0 and error < 0.1:
+                    # If no front wall detected and error is small, increase forward velocity for efficiency
+                    cmd.twist.linear.x = self.forward_vel * 2.0
+                else:
+                    cmd.twist.linear.x = self.forward_vel * math.exp(-self.k_fwd * abs(error))
                 cmd.twist.angular.z = steering_angle
         
 
