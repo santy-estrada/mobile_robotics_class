@@ -13,7 +13,7 @@ ack = False
 maze = ["empty_world.sdf", "j_maze.sdf", "melgui_maze.sdf", "DemoRaceTrack.sdf", "RaceTrack.sdf", "RaceTrackObs.sdf"]
 
 xacro_model = "ackerman_robot.urdf.xacro" if ack else "robot.urdf.xacro"
-gz_world = maze[4] # Change the index to select a different world
+gz_world = maze[5] # Change the index to select a different world
 
 def generate_launch_description():
     gazebo_pkg_name = "delta_gazebo"

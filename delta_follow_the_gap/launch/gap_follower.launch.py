@@ -28,8 +28,8 @@ def generate_launch_description():
     )
 
     aebs = Node(
-        package="delta_nav",
-        executable="ttc_break_node",
+        package="delta_follow_the_gap",
+        executable="ttc_break_gap_node",
         output="screen",
     )
 
