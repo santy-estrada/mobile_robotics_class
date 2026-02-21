@@ -4,7 +4,7 @@ from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import TwistStamped
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 import math
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Int32
 from std_msgs.msg import Float32MultiArray
 
 
@@ -36,6 +36,7 @@ class TTCBreakNode(Node):
         self.min_ttc = float('inf')              # Minimum TTC from all forward objects
         self.min_distance = float('inf')         # Minimum distance from all obstacles in relevant zone
         self.should_brake = False                # Flag indicating if emergency brake is needed
+        self.brake_trigger_angle = None          # Angle of the measurement that triggered brake
         
         # ---- Pub/Sub ----
         # QoS profile compatible with sensor publishers (RELIABLE, VOLATILE)
@@ -56,6 +57,8 @@ class TTCBreakNode(Node):
         self.cmd_ttc_publisher = self.create_publisher(TwistStamped, '/cmd_ttc', qos)
          # Publisher for safety-override velocity commands
         self.brake_pub = self.create_publisher(Bool, '/brake_active', 10)
+        # Publisher for brake direction (0=right, 1=left, 3=indeterminate)
+        self.dir_brake_pub = self.create_publisher(Int32, '/dir_brake', 10)
 
         self.ttc_array_pub = self.create_publisher(Float32MultiArray, '/ttc_values', 10)
         
@@ -103,6 +106,28 @@ class TTCBreakNode(Node):
             return ttc
         else:
             return float('inf')
+    
+    def _determine_brake_direction(self) -> int:
+        """
+        Determine the direction of the obstacle that triggered braking.
+        
+        Returns:
+            0 if obstacle is on the right side (angle < 0)
+            1 if obstacle is on the left side (angle > 0)
+            3 if cannot be determined or indeterminate (angle ≈ 0)
+        """
+        if self.brake_trigger_angle is None:
+            return 3
+        
+        # Threshold to classify as "straight ahead" (indeterminate)
+        straight_threshold = math.radians(self.forward_angle_range*0.05) # 5% of forward angle range
+        
+        if abs(self.brake_trigger_angle) < straight_threshold:
+            return 3  # Straight ahead, indeterminate
+        elif self.brake_trigger_angle < 0:
+            return 0  # Right side
+        else:
+            return 1  # Left side
     
     def _compute_directional_ttc_array(self, scan_msg, cmd_linear_x):
         """
@@ -172,6 +197,7 @@ class TTCBreakNode(Node):
         # Reset minimum TTC for this cycle
         self.min_ttc = float('inf')
         self.min_distance = float('inf')
+        self.brake_trigger_angle = None
         
         # Get the current forward velocity command
         cmd_linear_x = self.current_cmd_vel.twist.linear.x
@@ -236,10 +262,13 @@ class TTCBreakNode(Node):
                 # Track minimum TTC
                 if ttc < self.min_ttc:
                     self.min_ttc = ttc
+                    self.brake_trigger_angle = angle
                 
                 # Track minimum distance
                 if range_val < self.min_distance:
                     self.min_distance = range_val
+                    if self.min_distance < self.min_distance_threshold:
+                        self.brake_trigger_angle = angle
 
             # Append TTC for this ray (inf if not relevant or invalid)
             ttc_array.append(float(ttc))
@@ -276,6 +305,11 @@ class TTCBreakNode(Node):
         brake_msg = Bool()
         brake_msg.data = self.should_brake
         self.brake_pub.publish(brake_msg)
+        
+        # Publish brake direction
+        dir_msg = Int32()
+        dir_msg.data = self._determine_brake_direction()
+        self.dir_brake_pub.publish(dir_msg)
 
         # Log state changes
         if self.should_brake != was_braking:

@@ -1,8 +1,6 @@
 from setuptools import find_packages, setup
-import os
-from glob import glob
 
-package_name = 'delta_follow_the_gap'
+package_name = 'delta_measure'
 
 setup(
     name=package_name,
@@ -12,7 +10,6 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name,'launch'), glob('launch/*.*'))
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -27,11 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'control_gap_ttc = delta_follow_the_gap.control_gap_ttc:main',
-            'ttc_gap_logger_node = delta_follow_the_gap.ttc_gap_logger_node:main',
-            'ttc_break_gap_node = delta_follow_the_gap.ttc_break_gap_node:main',
-            'gap_distance_controller = delta_follow_the_gap.gap_distance_controller:main',
-            'gap_distance_node = delta_follow_the_gap.gap_distance_node:main',
+            'metrics_node = delta_measure.metrics_node:main',
         ],
     },
 )

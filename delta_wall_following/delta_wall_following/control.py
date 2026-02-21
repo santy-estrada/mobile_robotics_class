@@ -3,7 +3,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist, TwistStamped
 import math
 import statistics
-from std_msgs.msg import Bool, Float32MultiArray
+from std_msgs.msg import Bool, Float32MultiArray, Int32
 
 
 class ControlNode(Node):
@@ -43,6 +43,7 @@ class ControlNode(Node):
         self.prev_time = None
         # Brake state
         self.brake_active = False
+        self.brake_direction = 3  # 0=right, 1=left, 3=indeterminate
         # Predictive turn bias based on front wall proximity
         self.front_wall_turn_bias = 0.0
 
@@ -51,6 +52,14 @@ class ControlNode(Node):
             Bool,
             '/brake_active',
             self.brake_callback,
+            10
+        )
+
+        # Subscription to brake direction
+        self.dir_brake_sub = self.create_subscription(
+            Int32,
+            '/dir_brake',
+            self.dir_brake_callback,
             10
         )
 
@@ -89,6 +98,11 @@ class ControlNode(Node):
 
     def brake_callback(self, msg: Bool):
         self.brake_active = msg.data
+
+    def dir_brake_callback(self, msg: Int32):
+        if self.pub_logger:
+            self.get_logger().info(f"Received brake direction: {msg.data}")
+        self.brake_direction = msg.data
 
     def start_callback(self, msg: Bool):
         if msg.data:
@@ -204,8 +218,14 @@ class ControlNode(Node):
         
         # Forward velocity blocked if brake is active
         if self.brake_active:
-            cmd.twist.linear.x = self.forward_vel
-            cmd.twist.angular.z = self.brake_turn_angle  # Turn in place to the right when braking
+            cmd.twist.linear.x = self.forward_vel * 0.5
+            # Direction-aware braking: turn away from obstacle
+            if self.brake_direction == 0:  # Obstacle on right, turn left
+                cmd.twist.angular.z = self.brake_turn_angle
+            elif self.brake_direction == 1:  # Obstacle on left, turn right
+                cmd.twist.angular.z = -self.brake_turn_angle
+            else:  # Indeterminate or 3, default to turning right
+                cmd.twist.angular.z = -self.brake_turn_angle
         else:
             if wall_lost:
                 cmd.twist.linear.x = self.forward_vel * 0.8  # Move forward at half speed when wall is lost
