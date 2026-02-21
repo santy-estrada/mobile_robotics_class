@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'ttc_break_node = delta_nav.ttc_break_node:main',
+            'start_controller = delta_nav.start_controller:main',
         ],
     },
 )

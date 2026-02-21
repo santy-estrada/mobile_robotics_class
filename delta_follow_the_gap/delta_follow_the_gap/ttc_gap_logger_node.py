@@ -10,11 +10,14 @@ from geometry_msgs.msg import Twist
 class TTCGapLoggerNode(Node):
     def __init__(self):
         super().__init__('ttc_gap_logger_node')
+        self.declare_parameter('pub_logger', True)               #Flag to signal whether to publish error values for logging in ttc_gap_logger_node
 
+        self.pub_logger = bool(self.get_parameter('pub_logger').value)
         self.last_scan = None
-
+        self.clearance_angle = 20
         self.create_subscription(LaserScan, '/scan', self._scan_callback, 10)
         self.create_subscription(Float32MultiArray, '/ttc_values', self._ttc_callback, 10)
+        
 
         self.marker_pub = self.create_publisher(Marker, '/gap_marker', 10)
 
@@ -39,7 +42,24 @@ class TTCGapLoggerNode(Node):
 
         ttc = data[:720]
         direction_flag = data[720]
+        # -------- Clearance measure indices --------
+        offset = int(self.clearance_angle * 2)
 
+        idx_1 = offset
+        idx_2 = 360 - offset
+        idx_3 = 360 + offset
+        idx_4 = 720 - offset
+
+        # Asegurar que estén dentro de rango [0, 719]
+        indices_clearance = [
+            idx_1 % 720,
+            idx_2 % 720,
+            idx_3 % 720,
+            idx_4 % 720
+        ]
+
+        clearance_measure = [ttc[i] for i in indices_clearance]
+        perpe_measure=ttc[181]
         N = len(ttc)
         angle_min = self.last_scan.angle_min
         angle_inc = self.last_scan.angle_increment
@@ -67,10 +87,8 @@ class TTCGapLoggerNode(Node):
 
         # Decide which set to use based on flag
         if abs(direction_flag - 0.0) < 1e-6:
-            motion = "ADELANTE"
             indices = forward_indices
         else:
-            motion = "ATRÁS"
             indices = backward_indices_ordered
 
         if len(indices) == 0:
@@ -126,18 +144,30 @@ class TTCGapLoggerNode(Node):
         while angle_rad < -math.pi:
             angle_rad += 2 * math.pi
 
-        angle_deg = math.degrees(angle_rad)
-
         # Publish marker
         self._publish_gap_marker(angle_rad)
-        cmd_ang=Twist()
-        cmd_ang.angular.z=angle_rad
+        
+        cmd_ang = Twist()
+        mark_alert = 0.0
+        if angle_rad > 0 and clearance_measure[2] < 1.7:
+            angle_rad = -1.4 * angle_rad
+            mark_alert = 1.0
+        if angle_rad < 0 and clearance_measure[2] < 0.8:
+            angle_rad = 1.5 * angle_rad
+            mark_alert = 1.0
+        if angle_rad < 0 and clearance_measure[1] < 1.0:
+            angle_rad = -2.0 * angle_rad
+            mark_alert = 1.0
+
+        
+
+        cmd_ang.angular.z = angle_rad
+        cmd_ang.angular.y = mark_alert
         self.ang_err_pub.publish(cmd_ang)
-        # Log only what you asked (size + center angle + motion)
-        self.get_logger().info(
-            #f"Gap más grande: tamaño={largest_len} | centro={angle_deg:.2f}° | movimiento={motion}"
-            f"flag: {direction_flag} "
-        )
+        
+        # Logging
+        if self.pub_logger:
+            self.get_logger().info(f"clearances: {perpe_measure} ")
 
     def _publish_gap_marker(self, angle_rad):
         marker = Marker()
