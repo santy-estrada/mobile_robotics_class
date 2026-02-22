@@ -5,8 +5,7 @@ import re
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool
-from geometry_msgs.msg import TwistStamped
-from nav_msgs.msg import Odometry
+from geometry_msgs.msg import TwistStamped, Pose  # <-- Added Pose
 from rosgraph_msgs.msg import Clock
 
 
@@ -21,7 +20,6 @@ FIELDNAMES = [
     "distance_m",    # distancia acumulada en X-Y hasta esta muestra
     
 ]
-
 
 class MetricsLogger(Node):
 
@@ -71,14 +69,15 @@ class MetricsLogger(Node):
         self.create_subscription(Bool,         '/brake_active',                  self.brake_cb, 10)
         self.create_subscription(TwistStamped, '/cmd_vel_ttc_gap',               self.ref_cb,   10)
         self.create_subscription(TwistStamped, '/diffdrive_controller/cmd_vel',  self.cmd_cb,   10)
-        self.create_subscription(Odometry,     '/diffdrive_controller/odom',     self.odom_cb,  10)
-        self.create_subscription(Clock,        '/clock',                          self.clock_cb, 10)
-        self.create_subscription(Bool, '/stop', self.stop_cb, 10)
+        
+        # <-- Swapped /odom for the new /ground_truth_pose bridge topic -->
+        self.create_subscription(Pose,         '/ground_truth_pose',             self.pose_cb,  10)
+        
+        self.create_subscription(Clock,        '/clock',                         self.clock_cb, 10)
+        self.create_subscription(Bool,         '/stop',                          self.stop_cb,  10)
 
     # ─── Callbacks ───────────────────────────────────────────────────────
-    # En __init__
 
-    # Callback
     def stop_cb(self, msg: Bool):
         if msg.data:
             self.get_logger().info("[metrics_logger] Señal /stop recibida — cerrando.")
@@ -117,29 +116,28 @@ class MetricsLogger(Node):
             "brake":       1 if self.brake_event else 0,   # ← solo el flanco
             "x":           self.last_x if self.last_x is not None else 0.0,
             "y":           self.last_y if self.last_y is not None else 0.0,
-            "distance_m": self.total_distance,
+            "distance_m":  self.total_distance,
         }
         self.brake_event = False   # ← consumido, vuelve a 0 en la siguiente fila
         self._writer.writerow(row)
-        self._csv_file.flush()  # Flush after each write for data safety
+        self._csv_file.flush()  
 
-    def odom_cb(self, msg: Odometry):
-        """Integra distancia usando v * dt del reloj de simulación."""
+    # <-- New callback handling exact Gazebo Pose -->
+    def pose_cb(self, msg: Pose):
         if not self.start_flag or self.last_clock is None:
             return 
         if self.last_time is None:
             return
         
-        x = msg.pose.pose.position.x
-        y = msg.pose.pose.position.y
+        # In geometry_msgs/Pose, positions are at msg.position.x
+        x = msg.position.x
+        y = msg.position.y
 
         if self.last_x is not None:
             self.total_distance += math.hypot(x - self.last_x, y - self.last_y)
 
         self.last_x = x
         self.last_y = y
-        
-        
 
     def clock_cb(self, msg):
         t = msg.clock.sec + msg.clock.nanosec * 1e-9
@@ -159,7 +157,6 @@ class MetricsLogger(Node):
         self._csv_file.close()
         self.get_logger().info("CSV cerrado correctamente.")
 
-
 def main():
     rclpy.init()
     node = MetricsLogger()
@@ -171,7 +168,6 @@ def main():
         node.close()
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

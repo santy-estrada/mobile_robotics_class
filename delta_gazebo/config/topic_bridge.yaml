@@ -37,3 +37,10 @@
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "gz.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
+
+  # Gazebo -> ROS (Ground Truth Pose)
+- ros_topic_name: "/ground_truth_pose"
+  gz_topic_name: "/model/diffbot/pose"
+  ros_type_name: "geometry_msgs/msg/Pose"
+  gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
