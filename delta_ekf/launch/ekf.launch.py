@@ -51,8 +51,7 @@ def generate_launch_description():
         name="ekf_node",
         output="screen",
         parameters=[
-            ekf_params,
-            {"use_sim_time": use_sim_time},
+            ekf_params
         ],
         remappings=[
             # Uncomment if your topics differ:
