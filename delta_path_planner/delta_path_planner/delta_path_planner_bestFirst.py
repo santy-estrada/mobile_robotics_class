@@ -9,14 +9,18 @@ import numpy as np
 import heapq
 
 
-class DijkstraNode(Node):
+class BestFirst(Node):
     def __init__(self):
-        super().__init__('dijkstra_node')
+        super().__init__('best_first_node')
         
         # --- add these params at __init__ ---
         self.occ_thresh = self.declare_parameter('occ_thresh', 100).value
         self.robot_radius_m = self.declare_parameter('robot_radius_m', 0.5).value
         self.safety_margin_m = self.declare_parameter('safety_margin_m', 0.05).value
+        self.inbounds_thresh = self.declare_parameter('inbounds_thresh', 50).value
+        self.heuristic = self.declare_parameter('heuristic', 'manhattan').value
+        self.center = self.declare_parameter('center', False).value
+        self.avoid = self.declare_parameter('avoid', False).value
 
         qos = QoSProfile(durability=DurabilityPolicy.TRANSIENT_LOCAL, depth=10)
 
@@ -26,7 +30,7 @@ class DijkstraNode(Node):
         self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
 
         # Publishers
-        self.path_pub = self.create_publisher(Path, '/dijkstra_path', 10)
+        self.path_pub = self.create_publisher(Path, '/best_first_path', 10)
 
         # tf2 listener
         self.tf_buffer = tf2_ros.Buffer()
@@ -35,7 +39,7 @@ class DijkstraNode(Node):
         # Storage
         self.map = None
         self.goal = None
-        print('Dijkstra Node Initialized')
+        print('Best First Node Initialized')
 
     def map_callback(self, msg):
         self.map = msg
@@ -109,7 +113,11 @@ class DijkstraNode(Node):
         start = self.world_to_grid(tf.transform.translation)
         goal = self.world_to_grid(self.goal.pose.position)
 
-        path = self.dijkstra(start, goal)
+        path = self.best_first(start, goal)
+
+        if self.center and len(path) > 0:
+            # Adjust path to center of cells
+            path = [(x + 0.5* self.map.info.resolution, y + 0.5* self.map.info.resolution) for (x, y) in path]
 
         ros_path = Path()
         ros_path.header.frame_id = 'map'
@@ -130,36 +138,72 @@ class DijkstraNode(Node):
         my = int((pos.y - self.map.info.origin.position.y) / self.map.info.resolution)
         return (mx, my)
     
-    def dijkstra(self, start, goal):
+    def best_first(self, start, goal):
+        """Best First Search using heuristic to guide the search."""
         width = self.map.info.width
         height = self.map.info.height
         data = np.array(self.map.data).reshape((height, width))
 
         def in_bounds(x, y):
-            return 0 <= x < width and 0 <= y < height and data[y][x] < 50
+            return 0 <= x < width and 0 <= y < height and data[y][x] < self.inbounds_thresh and data[y][x] >= 0
+        
+        def heuristic(pos):
+            """Manhattan distance or Euclidean distance based on parameter."""
+            if self.heuristic == 'manhattan':
+                return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+            else:
+                return np.hypot(pos[0] - goal[0], pos[1] - goal[1])
+            
+        def avoid_cost(pos):
+            """Additional cost for cells near obstacles if avoid parameter is True."""
+            if not self.avoid:
+                return 0
+            x, y = pos
+            cost = 0
+            for dx in range(-5, 6):  # Check a 6x6 area around the cell
+                for dy in range(-5, 6):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < width and 0 <= ny < height and data[ny][nx] >= self.inbounds_thresh:
+                        cost += 1  # Arbitrary penalty for proximity to obstacles
+            return cost
 
         visited = set()
-        queue = [(0, start)]
+        g = {start: 0}  # Track actual cost to reach each node
+        g[goal] = float('inf')
+        
+        # Priority queue: (heuristic_value, node)
+        queue = [(heuristic(start), start)]
         came_from = {start: None}
 
         while queue:
-            cost, current = heapq.heappop(queue)
+            _, current = heapq.heappop(queue)
 
             if current in visited:
                 continue
+            
             visited.add(current)
 
             if current == goal:
                 break
 
             x, y = current
-            for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+            for dx, dy in [(-1,0), (1,0), (0,-1), (0,1), (-1,-1), (-1,1), (1,-1), (1,1)]:  # 8-connected neighbors
                 nx, ny = x + dx, y + dy
                 neighbor = (nx, ny)
+                
                 if in_bounds(nx, ny) and neighbor not in visited:
-                    heapq.heappush(queue, (cost + 1, neighbor))
-                    if neighbor not in came_from:
+                    new_cost = g[current] + 1  + avoid_cost(neighbor)  # Cost from current to neighbor
+                    
+                    # Initialize g value if not seen before
+                    if neighbor not in g:
+                        g[neighbor] = float('inf')
+                    
+                    # Update if we found a cheaper path
+                    if new_cost < g[neighbor]:
+                        g[neighbor] = new_cost
                         came_from[neighbor] = current
+                        # Push with heuristic as priority (not cost!)
+                        heapq.heappush(queue, (heuristic(neighbor), neighbor))
 
         # Reconstruct path
         path = []
@@ -168,13 +212,17 @@ class DijkstraNode(Node):
             path.append(node)
             node = came_from.get(node)
         path.reverse()
-        return path
 
+        if path and path[0] != start or path[-1] != goal or len(path) == 0:
+            print("No valid path found!")
+            return []
+        
+        return path
 	
 
 def main(args=None):
     rclpy.init(args=args)
-    node = DijkstraNode()
+    node = BestFirst()
     rclpy.spin(node)
     rclpy.shutdown()
 	

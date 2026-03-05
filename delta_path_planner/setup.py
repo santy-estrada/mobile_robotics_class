@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'dijkstra_node = delta_path_planner.delta_path_planner_dijkstra:main',
+            'best_first_node = delta_path_planner.delta_path_planner_bestFirst:main',
         ],
     },
 )
