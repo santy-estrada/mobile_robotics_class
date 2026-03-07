@@ -20,7 +20,7 @@ def generate_launch_description():
 		PythonLaunchDescriptionSource(
 			os.path.join(bringup_share, "launch", "gz_spawn.launch.py")
 		),
-		launch_arguments={"use_sim_time": use_sim_time}.items(),
+		launch_arguments={"use_sim_time": use_sim_time, "gz_mode": "False"}.items(),
 	)
 
 	ekf_launch = IncludeLaunchDescription(
@@ -33,7 +33,10 @@ def generate_launch_description():
 		executable="dijkstra_node",
 		name="dijkstra_node",
 		output="screen",
-		parameters=[{"use_sim_time": use_sim_time}],
+		parameters=[
+			{"use_sim_time": use_sim_time,
+	         "waypoints": False,  # Set to True to enable waypoints mode
+			 }],
 	)
 
 	best_first_node = Node(
@@ -41,7 +44,9 @@ def generate_launch_description():
 		executable="best_first_node",
 		name="best_first_node",
 		output="screen",
-		parameters=[{"use_sim_time": use_sim_time}],
+		parameters=[{"use_sim_time": use_sim_time,
+                    "waypoints": False,  # Set to True to enable waypoints mode
+            }],
 	)
 
 	amcl_localization_launch = IncludeLaunchDescription(
