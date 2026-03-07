@@ -17,13 +17,19 @@ class DijkstraNode(Node):
         self.occ_thresh = self.declare_parameter('occ_thresh', 100).value
         self.robot_radius_m = self.declare_parameter('robot_radius_m', 0.5).value
         self.safety_margin_m = self.declare_parameter('safety_margin_m', 0.05).value
+        self.use_waypoints = self.declare_parameter('waypoints', True).value
 
         qos = QoSProfile(durability=DurabilityPolicy.TRANSIENT_LOCAL, depth=10)
 
-
         # Subscribers
         self.create_subscription(OccupancyGrid, '/map', self.map_callback, qos)
-        self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
+        
+        if self.use_waypoints:
+            self.create_subscription(Path, '/waypoints_topic', self.waypoints_callback, qos)
+            self.get_logger().info('Dijkstra node in WAYPOINTS mode')
+        else:
+            self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
+            self.get_logger().info('Dijkstra node in GOAL_POSE mode')
 
         # Publishers
         self.path_pub = self.create_publisher(Path, '/dijkstra_path', 10)
@@ -35,7 +41,8 @@ class DijkstraNode(Node):
         # Storage
         self.map = None
         self.goal = None
-        print('Dijkstra Node Initialized')
+        self.waypoint_pairs = []
+        self.get_logger().info('Dijkstra node initialized')
 
     def map_callback(self, msg):
         self.map = msg
@@ -53,7 +60,7 @@ class DijkstraNode(Node):
         data[inflated_mask] = 100  # or 254, anything >= occ_thresh
         self.map.data = data.flatten().tolist()
         
-        print('Map received')
+        self.get_logger().info('Map received')
 		
     def make_inflation_mask(self, occ_grid, inflation_cells: int, occ_thresh: int):
         """Return boolean mask (h,w): True where cells are within `inflation_cells` of any obstacle."""
@@ -88,13 +95,59 @@ class DijkstraNode(Node):
         
     def goal_callback(self, msg):
         self.goal = msg
-        print('Goal received')
+        self.get_logger().info('Goal received')
         self.plan_path()
+
+    def waypoints_callback(self, msg):
+        """Handle waypoint pairs from waypoints_topic.
+        Path.poses are structured as: [start_0, goal_0, start_1, goal_1, ...]
+        """
+        self.waypoint_pairs = []
+        # Extract pairs from alternating poses
+        for i in range(0, len(msg.poses) - 1, 2):
+            start = msg.poses[i]
+            goal = msg.poses[i + 1]
+            self.waypoint_pairs.append({'start': start, 'goal': goal})
+        
+        self.get_logger().info(f'Received {len(self.waypoint_pairs)} waypoint pairs')
+        self.plan_waypoint_paths()
+
+    def plan_waypoint_paths(self):
+        """Plan paths for all waypoint pairs and publish as single combined path."""
+        if not self.map or not self.waypoint_pairs:
+            self.get_logger().warn('Map or waypoint pairs not available')
+            return
+        
+        # Create a single Path message containing all paths
+        combined_path = Path()
+        combined_path.header.frame_id = 'map'
+        
+        for i, pair in enumerate(self.waypoint_pairs):
+            start = self.world_to_grid(pair['start'].pose.position)
+            goal = self.world_to_grid(pair['goal'].pose.position)
+            path = self.dijkstra(start, goal)
+            
+            # Add all poses from this path to the combined path
+            for (x, y) in path:
+                pose = PoseStamped()
+                pose.header.frame_id = 'map'
+                pose.pose.position.x = x * self.map.info.resolution + self.map.info.origin.position.x
+                pose.pose.position.y = y * self.map.info.resolution + self.map.info.origin.position.y
+                pose.pose.orientation.w = 1.0
+                combined_path.poses.append(pose)
+            
+            self.get_logger().info(f'Waypoint pair {i} path calculated (length: {len(path)})')
+        
+        # Publish all paths as a single message
+        self.path_pub.publish(combined_path)
+        self.get_logger().info(f'Published combined path with {len(combined_path.poses)} total poses')
 		
     def plan_path(self):
-        print('Planning path...')
+        self.get_logger().info('Planning path...')
         if not self.map or not self.goal:
-            print(f'Waiting for map {self.map is not None} and goal {self.goal is not None}...')
+            self.get_logger().info(
+                f'Waiting for map {self.map is not None} and goal {self.goal is not None}...'
+            )
             return
 
         try:
@@ -123,7 +176,7 @@ class DijkstraNode(Node):
         
 
         self.path_pub.publish(ros_path)
-        print('Path published')
+        self.get_logger().info('Path published')
     
     def world_to_grid(self, pos):
         mx = int((pos.x - self.map.info.origin.position.x) / self.map.info.resolution)

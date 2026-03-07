@@ -21,13 +21,19 @@ class BestFirst(Node):
         self.heuristic = self.declare_parameter('heuristic', 'manhattan').value
         self.center = self.declare_parameter('center', False).value
         self.avoid = self.declare_parameter('avoid', False).value
+        self.use_waypoints = self.declare_parameter('waypoints', True).value
 
         qos = QoSProfile(durability=DurabilityPolicy.TRANSIENT_LOCAL, depth=10)
 
-
         # Subscribers
         self.create_subscription(OccupancyGrid, '/map', self.map_callback, qos)
-        self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
+        
+        if self.use_waypoints:
+            self.create_subscription(Path, '/waypoints_topic', self.waypoints_callback, qos)
+            self.get_logger().info('Best First node in WAYPOINTS mode')
+        else:
+            self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
+            self.get_logger().info('Best First node in GOAL_POSE mode')
 
         # Publishers
         self.path_pub = self.create_publisher(Path, '/best_first_path', 10)
@@ -39,7 +45,8 @@ class BestFirst(Node):
         # Storage
         self.map = None
         self.goal = None
-        print('Best First Node Initialized')
+        self.waypoint_pairs = []
+        self.get_logger().info('Best First node initialized')
 
     def map_callback(self, msg):
         self.map = msg
@@ -57,7 +64,7 @@ class BestFirst(Node):
         data[inflated_mask] = 100  # or 254, anything >= occ_thresh
         self.map.data = data.flatten().tolist()
         
-        print('Map received')
+        self.get_logger().info('Map received')
 		
     def make_inflation_mask(self, occ_grid, inflation_cells: int, occ_thresh: int):
         """Return boolean mask (h,w): True where cells are within `inflation_cells` of any obstacle."""
@@ -92,13 +99,62 @@ class BestFirst(Node):
         
     def goal_callback(self, msg):
         self.goal = msg
-        print('Goal received')
+        self.get_logger().info('Goal received')
         self.plan_path()
+
+    def waypoints_callback(self, msg):
+        """Handle waypoint pairs from waypoints_topic.
+        Path.poses are structured as: [start_0, goal_0, start_1, goal_1, ...]
+        """
+        self.waypoint_pairs = []
+        # Extract pairs from alternating poses
+        for i in range(0, len(msg.poses) - 1, 2):
+            start = msg.poses[i]
+            goal = msg.poses[i + 1]
+            self.waypoint_pairs.append({'start': start, 'goal': goal})
+        
+        self.get_logger().info(f'Received {len(self.waypoint_pairs)} waypoint pairs')
+        self.plan_waypoint_paths()
+
+    def plan_waypoint_paths(self):
+        """Plan paths for all waypoint pairs and publish as single combined path."""
+        if not self.map or not self.waypoint_pairs:
+            self.get_logger().warn('Map or waypoint pairs not available')
+            return
+        
+        # Create a single Path message containing all paths
+        combined_path = Path()
+        combined_path.header.frame_id = 'map'
+        
+        for i, pair in enumerate(self.waypoint_pairs):
+            start = self.world_to_grid(pair['start'].pose.position)
+            goal = self.world_to_grid(pair['goal'].pose.position)
+            path = self.best_first(start, goal)
+            
+            if self.center and len(path) > 0:
+                path = [(x + 0.5 * self.map.info.resolution, y + 0.5 * self.map.info.resolution) for (x, y) in path]
+
+            # Add all poses from this path to the combined path
+            for (x, y) in path:
+                pose = PoseStamped()
+                pose.header.frame_id = 'map'
+                pose.pose.position.x = x * self.map.info.resolution + self.map.info.origin.position.x
+                pose.pose.position.y = y * self.map.info.resolution + self.map.info.origin.position.y
+                pose.pose.orientation.w = 1.0
+                combined_path.poses.append(pose)
+            
+            self.get_logger().info(f'Waypoint pair {i} path calculated (length: {len(path)})')
+        
+        # Publish all paths as a single message
+        self.path_pub.publish(combined_path)
+        self.get_logger().info(f'Published combined path with {len(combined_path.poses)} total poses')
 		
     def plan_path(self):
-        print('Planning path...')
+        self.get_logger().info('Planning path...')
         if not self.map or not self.goal:
-            print(f'Waiting for map {self.map is not None} and goal {self.goal is not None}...')
+            self.get_logger().info(
+                f'Waiting for map {self.map is not None} and goal {self.goal is not None}...'
+            )
             return
 
         try:
@@ -131,7 +187,7 @@ class BestFirst(Node):
         
 
         self.path_pub.publish(ros_path)
-        print('Path published')
+        self.get_logger().info('Path published')
     
     def world_to_grid(self, pos):
         mx = int((pos.x - self.map.info.origin.position.x) / self.map.info.resolution)
@@ -213,8 +269,8 @@ class BestFirst(Node):
             node = came_from.get(node)
         path.reverse()
 
-        if path and path[0] != start or path[-1] != goal or len(path) == 0:
-            print("No valid path found!")
+        if not path or path[0] != start or path[-1] != goal:
+            self.get_logger().warn('No valid path found!')
             return []
         
         return path
