@@ -17,7 +17,7 @@ class DijkstraNode(Node):
         self.occ_thresh = self.declare_parameter('occ_thresh', 100).value
         self.robot_radius_m = self.declare_parameter('robot_radius_m', 0.5).value
         self.safety_margin_m = self.declare_parameter('safety_margin_m', 0.05).value
-        self.use_waypoints = self.declare_parameter('waypoints', True).value
+        self.use_waypoints = self.declare_parameter('waypoints', False).value
 
         qos = QoSProfile(durability=DurabilityPolicy.TRANSIENT_LOCAL, depth=10)
 
