@@ -29,6 +29,7 @@ setup(
     entry_points={
         'console_scripts': [
             'pure_pursuit_node = delta_path_tracking.pure_pursuit:main',
+            'stanley_node = delta_path_tracking.stanley:main',
         ],
     },
 )
