@@ -21,7 +21,7 @@ class BestFirst(Node):
         self.heuristic = self.declare_parameter('heuristic', 'manhattan').value
         self.center = self.declare_parameter('center', False).value
         self.avoid = self.declare_parameter('avoid', False).value
-        self.use_waypoints = self.declare_parameter('waypoints', False).value
+        self.use_waypoints = self.declare_parameter('waypoints', True).value
 
         qos = QoSProfile(durability=DurabilityPolicy.TRANSIENT_LOCAL, depth=10)
 
