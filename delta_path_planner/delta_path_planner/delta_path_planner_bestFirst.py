@@ -23,20 +23,25 @@ class BestFirst(Node):
         self.avoid = self.declare_parameter('avoid', False).value
         self.use_waypoints = self.declare_parameter('waypoints', True).value
 
+        self.map_topic = self.declare_parameter('topics.map_topic', '/map').value
+        self.goal_topic = self.declare_parameter('topics.goal_topic', '/goal_pose').value
+        self.waypoints_topic = self.declare_parameter('topics.waypoints_topic', '/waypoints_topic').value
+        self.path_topic = self.declare_parameter('topics.path_topic', '/best_first_path').value
+
         qos = QoSProfile(durability=DurabilityPolicy.TRANSIENT_LOCAL, depth=10)
 
         # Subscribers
-        self.create_subscription(OccupancyGrid, '/map', self.map_callback, qos)
+        self.create_subscription(OccupancyGrid, self.map_topic, self.map_callback, qos)
         
         if self.use_waypoints:
-            self.create_subscription(Path, '/waypoints_topic', self.waypoints_callback, qos)
+            self.create_subscription(Path, self.waypoints_topic, self.waypoints_callback, qos)
             self.get_logger().info('Best First node in WAYPOINTS mode')
         else:
-            self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
+            self.create_subscription(PoseStamped, self.goal_topic, self.goal_callback, 10)
             self.get_logger().info('Best First node in GOAL_POSE mode')
 
         # Publishers
-        self.path_pub = self.create_publisher(Path, '/best_first_path', 10)
+        self.path_pub = self.create_publisher(Path, self.path_topic, 10)
 
         # tf2 listener
         self.tf_buffer = tf2_ros.Buffer()

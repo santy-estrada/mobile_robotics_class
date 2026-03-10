@@ -58,7 +58,7 @@ class ARAPlannerNode(Node):
         # Opciones de grilla
         self.declare_parameter('geometry.occupied_threshold', 65)
         self.declare_parameter('geometry.use_8_connected', True)
-        self.declare_parameter('geometry.inflate_radius', 0.15)
+        self.declare_parameter('geometry.inflate_radius', 0.5)
         self.declare_parameter('geometry.treat_unknown_as_obstacle', True)
 
         # --- ParÃ¡metros NUEVOS para ARA* ---

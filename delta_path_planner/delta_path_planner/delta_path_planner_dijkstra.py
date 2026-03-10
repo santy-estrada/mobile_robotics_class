@@ -19,20 +19,25 @@ class DijkstraNode(Node):
         self.safety_margin_m = self.declare_parameter('safety_margin_m', 0.05).value
         self.use_waypoints = self.declare_parameter('waypoints', False).value
 
+        self.map_topic = self.declare_parameter('topics.map_topic', '/map').value
+        self.goal_topic = self.declare_parameter('topics.goal_topic', '/goal_pose').value
+        self.waypoints_topic = self.declare_parameter('topics.waypoints_topic', '/waypoints_topic').value
+        self.path_topic = self.declare_parameter('topics.path_topic', '/dijkstra_path').value
+
         qos = QoSProfile(durability=DurabilityPolicy.TRANSIENT_LOCAL, depth=10)
 
         # Subscribers
-        self.create_subscription(OccupancyGrid, '/map', self.map_callback, qos)
+        self.create_subscription(OccupancyGrid, self.map_topic, self.map_callback, qos)
         
         if self.use_waypoints:
-            self.create_subscription(Path, '/waypoints_topic', self.waypoints_callback, qos)
+            self.create_subscription(Path, self.waypoints_topic, self.waypoints_callback, qos)
             self.get_logger().info('Dijkstra node in WAYPOINTS mode')
         else:
-            self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
+            self.create_subscription(PoseStamped, self.goal_topic, self.goal_callback, 10)
             self.get_logger().info('Dijkstra node in GOAL_POSE mode')
 
         # Publishers
-        self.path_pub = self.create_publisher(Path, '/dijkstra_path', 10)
+        self.path_pub = self.create_publisher(Path, self.path_topic, 10)
 
         # tf2 listener
         self.tf_buffer = tf2_ros.Buffer()
@@ -80,7 +85,7 @@ class DijkstraNode(Node):
             q.append((x, y))
 
         # 4-connected neighbors for distance
-        for_yx = [(-1,0),(1,0),(0,-1),(0,1), (-1,-1), (-1,1), (1,-1), (1,1)]  # 8-connected for more accurate inflation
+        for_yx = [(-1,0),(1,0),(0,-1),(0,1)]  # 4-connected for faster computation
         while q:
             x, y = q.popleft()
             d = dist[y, x]
@@ -206,7 +211,7 @@ class DijkstraNode(Node):
                 break
 
             x, y = current
-            for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+            for dx, dy in [(-1,0),(1,0),(0,-1),(0,1), (-1,-1), (-1,1), (1,-1), (1,1)]:  # 8-connected for more natural paths
                 nx, ny = x + dx, y + dy
                 neighbor = (nx, ny)
                 if in_bounds(nx, ny) and neighbor not in visited:
