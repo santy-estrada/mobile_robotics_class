@@ -50,7 +50,7 @@ class StartController(Node):
         if fwd_vel > 0.0:
             if not self.start_flag:
                 self.start_flag = True
-                self.get_logger().info("Received first joystick command. Starting TTC monitoring.")
+                self.get_logger().info("Received first joystick command.")
             # Publish start signal to other nodes
             start_msg = Bool()
             start_msg.data = self.start_flag
@@ -64,7 +64,7 @@ class StartController(Node):
                 if 's' in key:
                     if not self.start_flag:
                         self.start_flag = True
-                        self.get_logger().info("Received 's' key press. Starting TTC monitoring.")
+                        self.get_logger().info("Received 's' key press.")
                     # Publish start signal to other nodes
                     start_msg = Bool()
                     start_msg.data = self.start_flag

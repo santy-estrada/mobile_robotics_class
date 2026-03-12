@@ -29,7 +29,7 @@ def generate_launch_description():
 		PythonLaunchDescriptionSource(
 			os.path.join(bringup_share, "launch", "gz_spawn.launch.py")
 		),
-		launch_arguments={"use_sim_time": use_sim_time, "gz_mode": "False"}.items(),
+		launch_arguments={"use_sim_time": use_sim_time, "gz_mode": "True"}.items(),
 	)
 
 	ekf_launch = IncludeLaunchDescription(

@@ -15,12 +15,13 @@ class TTCBreakNode(Node):
         
         # ---- Parameters ----
         self.declare_parameter('publish_rate', 100.0)           # Hz - rate to check TTC and publish commands
-        self.declare_parameter('ttc_threshold', 0.55)            # seconds - TTC threshold for emergency braking
+        self.declare_parameter('ttc_threshold', 1.0)            # seconds - TTC threshold for emergency braking
         self.declare_parameter('min_distance_threshold', 0.5)   # meters - minimum distance to obstacle for braking
-        self.declare_parameter('forward_angle_range', 10.0)     # degrees - angle range in front of robot to consider
+        self.declare_parameter('forward_angle_range', 15.0)     # degrees - angle range in front of robot to consider
         self.declare_parameter('rear_angle_range', 10.0)        # degrees - angle range at rear of robot to consider
         self.declare_parameter('min_range', 0.1)                # meters - ignore measurements closer than this
         self.declare_parameter('max_range', 12.0)               # meters - ignore measurements farther than this
+        self.declare_parameter("safety_bubble", True)           # If true, consider all measurements within min_distance_threshold as braking threats regardless of TTC
         
         self.publish_rate = float(self.get_parameter('publish_rate').value)
         self.ttc_threshold = float(self.get_parameter('ttc_threshold').value)
@@ -29,6 +30,7 @@ class TTCBreakNode(Node):
         self.rear_angle_range = float(self.get_parameter('rear_angle_range').value)
         self.min_range = float(self.get_parameter('min_range').value)
         self.max_range = float(self.get_parameter('max_range').value)
+        self.safety_bubble = bool(self.get_parameter('safety_bubble').value)
         
         # ---- State ----
         self.current_cmd_vel = TwistStamped()    # Last received command velocity
@@ -59,6 +61,9 @@ class TTCBreakNode(Node):
         self.brake_pub = self.create_publisher(Bool, '/brake_active', 10)
         # Publisher for brake direction (0=right, 1=left, 3=indeterminate)
         self.dir_brake_pub = self.create_publisher(Int32, '/dir_brake', 10)
+
+        if self.safety_bubble:
+            self.brake_warn_pub = self.create_publisher(Bool, '/brake_warn', 10)
 
         self.ttc_array_pub = self.create_publisher(Float32MultiArray, '/ttc_values', 10)
         
@@ -120,11 +125,33 @@ class TTCBreakNode(Node):
             return 3
         
         # Threshold to classify as "straight ahead" (indeterminate)
-        straight_threshold = math.radians(self.forward_angle_range*0.05) # 5% of forward angle range
+        straight_threshold = math.radians(self.forward_angle_range*0.03) # 3% of forward angle range
         
         if abs(self.brake_trigger_angle) < straight_threshold:
             return 3  # Straight ahead, indeterminate
         elif self.brake_trigger_angle < 0:
+            return 0  # Right side
+        else:
+            return 1  # Left side
+        
+    def _determine_brake_direction_ang(self, angle) -> int:
+        """
+        Determine the direction of the obstacle that triggered braking.
+        
+        Returns:
+            0 if obstacle is on the right side (angle < 0)
+            1 if obstacle is on the left side (angle > 0)
+            3 if cannot be determined or indeterminate (angle ≈ 0)
+        """
+        if angle is None:
+            return 3
+        
+        # Threshold to classify as "straight ahead" (indeterminate)
+        straight_threshold = math.radians(self.forward_angle_range*0.03) # 3% of forward angle range
+        
+        if abs(angle) < straight_threshold:
+            return 3  # Straight ahead, indeterminate
+        elif angle < 0:
             return 0  # Right side
         else:
             return 1  # Left side
@@ -215,7 +242,7 @@ class TTCBreakNode(Node):
             
             # No brake needed when stopped
             brake_msg = Bool()
-            brake_msg.data = False
+            brake_msg.data = True
             self.brake_pub.publish(brake_msg)
             return
         
@@ -246,6 +273,29 @@ class TTCBreakNode(Node):
                 angle -= 2 * math.pi
             while angle < -math.pi:
                 angle += 2 * math.pi
+
+            # If the safety bubble parameter is enabled, consider any measurement within min_distance_threshold as a threat regardless of TTC
+            if self.safety_bubble and range_val < self.min_distance_threshold:
+                # Publish as a break as True to warn
+                brake_msg = Bool()
+                brake_msg.data = True
+                self.brake_warn_pub.publish(brake_msg)
+
+                # Publish brake warn direction
+                dir_msg = Int32()
+                dir_msg.data = self._determine_brake_direction_ang(angle)
+                self.dir_brake_pub.publish(dir_msg)
+
+                self.get_logger().warn(
+                    f"SAFETY BUBBLE ALERT: Obstacle at {range_val:.2f}m within safety bubble (threshold: {self.min_distance_threshold}m). Direction {self._determine_brake_direction_ang(angle)}."
+                    f"Issuing brake warning!"
+                )
+                continue
+            else:
+                # If outside safety bubble, publish brake warn as False
+                brake_msg = Bool()
+                brake_msg.data = False
+                self.brake_warn_pub.publish(brake_msg)
             
             # Check if measurement is in relevant cone based on direction of motion
             in_relevant_zone = False

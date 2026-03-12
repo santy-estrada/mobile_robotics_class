@@ -54,14 +54,15 @@ class StanleyNode(Node):
         self.declare_parameter("use_StartFlag", True)
         self.declare_parameter("use_ttc", True)
         self.declare_parameter("ttc_brake_topic", "/brake_active")
+        self.declare_parameter("ttc_brake_warn_topic", "/brake_warn")
         self.declare_parameter("ttc_dir_topic", "/dir_brake")
         self.declare_parameter("ttc_turn_boost", 0.7)
-        self.declare_parameter("ttc_assist_alpha", 0.5)
         self.declare_parameter("max_omega_ttc", 2.5)
-        self.declare_parameter("pub_errs", True)
+        self.declare_parameter("pub_errs", False)
         self.declare_parameter("cross_track_error_topic", "/stanley/cross_track_error")
         self.declare_parameter("heading_error_topic", "/stanley/heading_error")
         self.declare_parameter("delta_topic", "/stanley/delta")
+        self.declare_parameter("pub_debug", True)
 
 
         # Small eps to avoid division by zero
@@ -85,13 +86,10 @@ class StanleyNode(Node):
         self.use_start_flag = bool(self.get_parameter("use_StartFlag").value)
         self.use_ttc = bool(self.get_parameter("use_ttc").value)
         self.ttc_brake_topic = str(self.get_parameter("ttc_brake_topic").value)
+        self.ttc_brake_warn_topic = str(self.get_parameter("ttc_brake_warn_topic").value)
         self.ttc_dir_topic = str(self.get_parameter("ttc_dir_topic").value)
         self.ttc_turn_boost = abs(float(self.get_parameter("ttc_turn_boost").value))
-        self.ttc_assist_alpha = clamp(
-            float(self.get_parameter("ttc_assist_alpha").value),
-            0.0,
-            1.0,
-        )
+
         self.pub_errs = bool(self.get_parameter("pub_errs").value)
         self.cross_track_error_topic = str(self.get_parameter("cross_track_error_topic").value)
         self.heading_error_topic = str(self.get_parameter("heading_error_topic").value)
@@ -100,6 +98,8 @@ class StanleyNode(Node):
         self.eps = float(self.get_parameter("eps").value)
         self.tf_timeout = float(self.get_parameter("tf_timeout_sec").value)
         self.max_omega_ttc = max(float(self.get_parameter("max_omega_ttc").value), self.max_omega)
+
+        self.pub_debug = bool(self.get_parameter("pub_debug").value)
 
         # ---- ROS interfaces
         self.cmd_pub = self.create_publisher(TwistStamped, self.cmd_topic, 10)
@@ -136,6 +136,7 @@ class StanleyNode(Node):
 
         # TTC-assisted turning state
         self.ttc_brake_active = False
+        self.ttc_brake_warn_active = False
         self.ttc_obstacle_dir = 3  # 0:right obstacle, 1:left obstacle, 3:indeterminate
         if self.use_ttc:
             self.ttc_brake_sub = self.create_subscription(
@@ -148,6 +149,12 @@ class StanleyNode(Node):
                 Int32,
                 self.ttc_dir_topic,
                 self.ttc_dir_callback,
+                10,
+            )
+            self.ttc_brake_warn_sub = self.create_subscription(
+                Bool,
+                self.ttc_brake_warn_topic,
+                self.ttc_brake_warn_callback,
                 10,
             )
             self.get_logger().info(
@@ -165,7 +172,6 @@ class StanleyNode(Node):
                 self.start_callback,
                 10,
             )
-
         else:
             self.get_logger().info("Start flag mode disabled.")
 
@@ -196,6 +202,9 @@ class StanleyNode(Node):
 
     def ttc_brake_callback(self, msg: Bool) -> None:
         self.ttc_brake_active = bool(msg.data)
+
+    def ttc_brake_warn_callback(self, msg: Bool) -> None:
+        self.ttc_brake_warn_active = bool(msg.data)
 
     def ttc_dir_callback(self, msg: Int32) -> None:
         direction = int(msg.data)
@@ -230,23 +239,41 @@ class StanleyNode(Node):
 
     def apply_ttc_turn_assist(self, omega: float) -> float:
         omega_base = clamp(omega, -self.max_omega, self.max_omega)
-        if not (self.use_ttc and self.ttc_brake_active):
+        ttc_emergency = self.use_ttc and self.ttc_brake_active
+        ttc_warning = self.use_ttc and self.ttc_brake_warn_active and not ttc_emergency
+
+        # Apply assist for both emergency brake and warning levels.
+        if not (ttc_emergency or ttc_warning):
             return omega_base
 
         # Build an avoidance steering target, then blend with the Stanley command.
         if self.ttc_obstacle_dir == 0:
             # Obstacle on right -> steer left.
             omega_avoid = abs(omega_base) + self.ttc_turn_boost
+            if self.pub_debug:
+                state = "brake" if ttc_emergency else "warning"
+                self.get_logger().info(
+                    f"TTC {state} active with right obstacle. Applying left turn assist."
+                )
         elif self.ttc_obstacle_dir == 1:
             # Obstacle on left -> steer right.
             omega_avoid = -(abs(omega_base) + self.ttc_turn_boost)
+            if self.pub_debug:
+                state = "brake" if ttc_emergency else "warning"
+                self.get_logger().info(
+                    f"TTC {state} active with left obstacle. Applying right turn assist."
+                )
         else:
             # Unknown side: keep Stanley steering to avoid spinning on stale direction info.
             return omega_base
 
+        if ttc_warning:
+            # Warning mode should still steer away, but less aggressively than full brake mode.
+            omega_avoid *= 0.7
+
         omega_avoid = clamp(omega_avoid, -self.max_omega_ttc, self.max_omega_ttc)
-        omega_blended = (1.0 - self.ttc_assist_alpha) * omega_base + self.ttc_assist_alpha * omega_avoid
-        return clamp(omega_blended, -self.max_omega_ttc, self.max_omega_ttc)
+
+        return omega_avoid
 
     def on_path(self, msg: Path) -> None:
         self.path = list(msg.poses)
@@ -265,11 +292,15 @@ class StanleyNode(Node):
         # Safety condition: no path -> stop
         if not self.has_path:
             self.publish_stop()
+            if self.pub_debug:
+                self.get_logger().debug("No path available. Publishing stop command.")
             return
 
         # Optional start gate: remain stopped until /start is received.
         if self.use_start_flag and not self.start_flag:
             self.publish_stop()
+            if self.pub_debug:
+                self.get_logger().debug("Waiting for start signal. Publishing stop command.")
             return
 
         # 1) Get transform base_link <- path_frame
@@ -289,6 +320,8 @@ class StanleyNode(Node):
         goal_pose_b = self.transform_pose_to_base(self.path[-1], tf)
         if goal_pose_b is None:
             self.publish_stop()
+            if self.pub_debug:
+                self.get_logger().debug("Failed to transform goal pose to base frame. Publishing stop command.")
             return
 
         goal_dist = math.hypot(goal_pose_b.pose.position.x, goal_pose_b.pose.position.y)
@@ -300,12 +333,16 @@ class StanleyNode(Node):
                 # Re-arm the start gate so repeated path updates do not restart motion.
                 self.start_flag = False
             self.publish_stop()
+            if self.pub_debug:
+                self.get_logger().info(f"Goal reached (distance {goal_dist:.2f} m).")
             return
 
         # 3) Compute Stanley heading and cross-track errors
         errors = self.compute_stanley_errors(tf)
         if errors is None:
             self.publish_stop()
+            if self.pub_debug:
+                self.get_logger().warn("Failed to compute Stanley errors. Publishing stop command.")
             return
 
         heading_error, cross_track_error, idx = errors
@@ -374,7 +411,7 @@ class StanleyNode(Node):
         # Robot heading is zero in base_link, so heading error is path heading directly.
         heading_error = wrap_to_pi(math.atan2(dy, dx))
 
-        # Signed distance from robot origin to path segment line (left is positive).
+        # Signed distance from robot origin to path segment line (left is positive with 'y' as the divider).
         cross_track_error = (dx * y0 - dy * x0) / seg_norm
         return heading_error, cross_track_error
 
@@ -424,6 +461,7 @@ class StanleyNode(Node):
 
         p_closest = self._get_transformed_xy(closest_idx, tf, cache)
         if p_closest is None:
+            self.get_logger().warn("Failed to compute errors: could not transform closest point.")
             return None
 
         _, y = p_closest
