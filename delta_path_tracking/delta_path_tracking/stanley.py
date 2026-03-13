@@ -434,7 +434,7 @@ class StanleyNode(Node):
         Returns (heading_error, cross_track_error, closest_index).
         """
         n = len(self.path)
-        start = min(max(self.last_closest_index-20, 0), n - 1)
+        start = min(max(self.last_closest_index, 0), n - 1)
 
         cache: Dict[int, Tuple[float, float]] = {}
         closest_idx: Optional[int] = None
@@ -455,8 +455,14 @@ class StanleyNode(Node):
             return None
 
         if closest_idx < n - 1:
-            p0 = self._get_transformed_xy(closest_idx, tf, cache)
-            p1 = self._get_transformed_xy(closest_idx + 1, tf, cache)
+            if closest_idx - 5 > 0:
+                p0 = self._get_transformed_xy(closest_idx - 5, tf, cache)
+            else:
+                p0 = self._get_transformed_xy(closest_idx, tf, cache)
+            if closest_idx + 5 < n:
+                p1 = self._get_transformed_xy(closest_idx + 5, tf, cache)
+            else:
+                p1 = self._get_transformed_xy(closest_idx, tf, cache)
             if p0 is not None and p1 is not None:
                 errors = self._segment_errors(p0, p1)
                 if errors is not None:
