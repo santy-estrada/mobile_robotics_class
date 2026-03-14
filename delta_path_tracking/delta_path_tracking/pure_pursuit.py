@@ -8,7 +8,7 @@ from rclpy.duration import Duration
 
 from geometry_msgs.msg import TwistStamped, PoseStamped
 from nav_msgs.msg import Path
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float64
 
 import tf2_ros
 from tf2_ros import TransformException
@@ -44,6 +44,10 @@ class PurePursuitNode(Node):
         self.declare_parameter("max_omega", 1.5)            # rad/s
         self.declare_parameter("goal_tolerance", 0.25)      # m
         self.declare_parameter("use_StartFlag", True)
+        self.declare_parameter("pub_errs", True)
+        self.declare_parameter("cross_track_error_topic", "/cross_track_error")
+        self.declare_parameter("heading_error_topic", "/heading_error")
+        self.declare_parameter("delta_topic", "/delta")
 
         # Lookahead: Ld = clamp(L0 + k*v, Lmin, Lmax)
         self.declare_parameter("lookahead_L0", 0.6)         # m
@@ -69,6 +73,10 @@ class PurePursuitNode(Node):
         self.max_omega = float(self.get_parameter("max_omega").value)
         self.goal_tol = float(self.get_parameter("goal_tolerance").value)
         self.use_start_flag = bool(self.get_parameter("use_StartFlag").value)
+        self.pub_errs = bool(self.get_parameter("pub_errs").value)
+        self.cross_track_error_topic = str(self.get_parameter("cross_track_error_topic").value)
+        self.heading_error_topic = str(self.get_parameter("heading_error_topic").value)
+        self.delta_topic = str(self.get_parameter("delta_topic").value)
 
         self.L0 = float(self.get_parameter("lookahead_L0").value)
         self.kv = float(self.get_parameter("lookahead_kv").value)
@@ -81,6 +89,35 @@ class PurePursuitNode(Node):
         # ---- ROS interfaces
         self.cmd_pub = self.create_publisher(TwistStamped, self.cmd_topic, 10)
         self.path_sub = self.create_subscription(Path, self.path_topic, self.on_path, 10)
+
+        # Optional error publishers
+        self.cross_track_error_pub = None
+        self.heading_error_pub = None
+        self.delta_pub = None
+        if self.pub_errs:
+            self.cross_track_error_pub = self.create_publisher(
+                Float64,
+                self.cross_track_error_topic,
+                10,
+            )
+            self.heading_error_pub = self.create_publisher(
+                Float64,
+                self.heading_error_topic,
+                10,
+            )
+            self.delta_pub = self.create_publisher(
+                Float64,
+                self.delta_topic,
+                10,
+            )
+            self.get_logger().info(
+                "Error publishers enabled "
+                f"(cte: {self.cross_track_error_topic}, "
+                f"heading: {self.heading_error_topic}, "
+                f"compound: {self.delta_topic})."
+            )
+        else:
+            self.get_logger().info("Error publishers disabled.")
 
         self.start_flag = not self.use_start_flag
         if self.use_start_flag:
@@ -115,6 +152,30 @@ class PurePursuitNode(Node):
             if not self.start_flag:
                 self.get_logger().info("Received start signal. Starting control.")
             self.start_flag = True
+
+    def publish_error_signals(
+        self,
+        cross_track_error: float,
+        heading_error: float,
+        delta: float,
+    ) -> None:
+        if not self.pub_errs:
+            return
+
+        if self.cross_track_error_pub is not None:
+            msg = Float64()
+            msg.data = float(cross_track_error)
+            self.cross_track_error_pub.publish(msg)
+
+        if self.heading_error_pub is not None:
+            msg = Float64()
+            msg.data = float(heading_error)
+            self.heading_error_pub.publish(msg)
+
+        if self.delta_pub is not None:
+            msg = Float64()
+            msg.data = float(delta)
+            self.delta_pub.publish(msg)
 
     def on_path(self, msg: Path) -> None:
         self.path = list(msg.poses)
@@ -184,7 +245,10 @@ class PurePursuitNode(Node):
 
         # 5) Pure Pursuit curvature and angular velocity
         # kappa = 2*by / Ld^2
+        heading_error = math.atan2(by, bx)
+        cross_track_error = by
         kappa = (2.0 * by) / (Ld * Ld + self.eps)
+        self.publish_error_signals(cross_track_error, heading_error, kappa)
         omega = v_cmd * kappa
 
         # Clamp omega
