@@ -52,7 +52,7 @@ class PurePursuitNode(Node):
         self.declare_parameter("use_ttc", True)
         self.declare_parameter("use_narrow_section_speed_reduction", True)
         self.declare_parameter("narrow_section_topic", "/narrow_section_active")
-        self.declare_parameter("narrow_speed_factor", 0.55)
+        self.declare_parameter("narrow_speed_factor", 0.8)
         self.declare_parameter("narrow_speed_min", 0.2)
         self.declare_parameter("ttc_brake_topic", "/brake_active")
         self.declare_parameter("ttc_brake_warn_topic", "/brake_warn")
