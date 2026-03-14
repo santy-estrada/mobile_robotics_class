@@ -66,7 +66,7 @@ def generate_launch_description():
 			   "use_start": True,
 			   "manual": True,
 			   "closed_loop": True,
-			   "num_points": 5,
+			   "num_points": 20,
 			   "waypoints_file": "/home/santy-estrada/mrad_ws_2601_delta/src/delta_path_planner/waypoints_json/sample_waypoints.json"}],
 		condition=IfCondition(use_waypoints),
 	)
@@ -116,7 +116,7 @@ def generate_launch_description():
 			),
 			DeclareLaunchArgument(
 				"use_waypoints",
-				default_value="false",
+				default_value="true",
 				description="If true planner listens to /waypoints_topic and launches waypoints_node.",
 			),
 			gz_spawn_launch,

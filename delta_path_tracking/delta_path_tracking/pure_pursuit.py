@@ -55,6 +55,8 @@ class PurePursuitNode(Node):
         self.declare_parameter("narrow_section_topic", "/narrow_section_active")
         self.declare_parameter("narrow_speed_factor", 0.8)
         self.declare_parameter("narrow_speed_min", 0.2)
+        self.declare_parameter("use_ttc_brake_speed_reduction", True)
+        self.declare_parameter("ttc_brake_speed", 0.9)
         self.declare_parameter("ttc_brake_topic", "/brake_active")
         self.declare_parameter("ttc_brake_warn_topic", "/brake_warn")
         self.declare_parameter("ttc_dir_topic", "/dir_brake")
@@ -107,6 +109,10 @@ class PurePursuitNode(Node):
             1.0,
         )
         self.narrow_speed_min = max(float(self.get_parameter("narrow_speed_min").value), 0.0)
+        self.use_ttc_brake_speed_reduction = bool(
+            self.get_parameter("use_ttc_brake_speed_reduction").value
+        )
+        self.ttc_brake_speed = max(float(self.get_parameter("ttc_brake_speed").value), 0.0)
         self.ttc_brake_topic = str(self.get_parameter("ttc_brake_topic").value)
         self.ttc_brake_warn_topic = str(self.get_parameter("ttc_brake_warn_topic").value)
         self.ttc_dir_topic = str(self.get_parameter("ttc_dir_topic").value)
@@ -247,6 +253,11 @@ class PurePursuitNode(Node):
             f"(goal_tolerance={self.goal_tol:.2f} m, index_window={self.goal_index_window} points, "
             "<=0 disables gate)."
         )
+        self.get_logger().info(
+            "TTC brake speed cap "
+            f"({'enabled' if self.use_ttc_brake_speed_reduction else 'disabled'}, "
+            f"speed={self.ttc_brake_speed:.2f} m/s when brake is active)."
+        )
 
     def start_callback(self, msg: Bool) -> None:
         if msg.data:
@@ -300,6 +311,17 @@ class PurePursuitNode(Node):
         reduced_speed = speed_cmd * self.narrow_speed_factor
         min_speed = min(self.narrow_speed_min, upper_bound)
         return clamp(reduced_speed, min_speed, upper_bound)
+
+    def apply_ttc_brake_speed_reduction(self, speed_cmd: float, upper_bound: float) -> float:
+        speed_cmd = clamp(speed_cmd, 0.0, upper_bound)
+
+        if not self.use_ttc_brake_speed_reduction:
+            return speed_cmd
+        if not self.use_ttc or not self.ttc_brake_active:
+            return speed_cmd
+
+        brake_speed_cap = min(self.ttc_brake_speed, upper_bound)
+        return clamp(min(speed_cmd, brake_speed_cap), 0.0, upper_bound)
 
     def publish_error_signals(
         self,
@@ -366,7 +388,6 @@ class PurePursuitNode(Node):
         self.path = list(msg.poses)
         self.path_frame = msg.header.frame_id if msg.header.frame_id else None
         self.has_path = len(self.path) > 0 and self.path_frame is not None
-        self.last_target_index = 0  # reset; you can improve by finding closest point here
 
         if not self.has_path:
             self.get_logger().warn("Received empty path or missing frame_id.")
@@ -429,9 +450,11 @@ class PurePursuitNode(Node):
         if self.use_adaptative_v:
             v_for_lookahead = clamp(self.prev_v_cmd, 0.0, self.v_adapt_max)
             v_for_lookahead = self.apply_narrow_speed_reduction(v_for_lookahead, self.v_adapt_max)
+            v_for_lookahead = self.apply_ttc_brake_speed_reduction(v_for_lookahead, self.v_adapt_max)
         else:
             v_for_lookahead = clamp(self.v_nominal, 0.0, self.max_speed)
             v_for_lookahead = self.apply_narrow_speed_reduction(v_for_lookahead, self.max_speed)
+            v_for_lookahead = self.apply_ttc_brake_speed_reduction(v_for_lookahead, self.max_speed)
         Ld = clamp(self.L0 + self.kv * abs(v_for_lookahead), self.Lmin, self.Lmax)
 
         # 4) Select target point in base_link frame
@@ -455,9 +478,11 @@ class PurePursuitNode(Node):
             v_cmd = (1.0 - self.v_smoothing_alpha) * self.prev_v_cmd + self.v_smoothing_alpha * v_target
             v_cmd = clamp(v_cmd, self.v_min, self.v_adapt_max)
             v_cmd = self.apply_narrow_speed_reduction(v_cmd, self.v_adapt_max)
+            v_cmd = self.apply_ttc_brake_speed_reduction(v_cmd, self.v_adapt_max)
         else:
             v_cmd = clamp(self.v_nominal, 0.0, self.max_speed)
             v_cmd = self.apply_narrow_speed_reduction(v_cmd, self.max_speed)
+            v_cmd = self.apply_ttc_brake_speed_reduction(v_cmd, self.max_speed)
 
         cross_track_error = by
         kappa = (2.0 * by) / (Ld * Ld + self.eps)
