@@ -42,7 +42,7 @@ class SimpleEKF(Node):
         super().__init__('ekf_node')
 
         # ---- Parameters ----
-        self.declare_parameter('frequency', 30.0)
+        self.declare_parameter('frequency', 50.0)
         self.declare_parameter('sensor_timeout', 0.2)
         self.declare_parameter('frames.map_frame', 'map')
         self.declare_parameter('frames.odom_frame', 'odom')
