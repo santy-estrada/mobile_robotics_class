@@ -63,7 +63,7 @@ def generate_launch_description():
 		output="screen",
 		parameters=[{"use_sim_time": use_sim_time,
 			   "use_start": True,
-			   "manual": False,
+			   "manual": True,
 			   "closed_loop": True}],
 		condition=IfCondition(use_waypoints),
 	)
@@ -113,7 +113,7 @@ def generate_launch_description():
 			),
 			DeclareLaunchArgument(
 				"use_waypoints",
-				default_value="false",
+				default_value="true",
 				description="If true planner listens to /waypoints_topic and launches waypoints_node.",
 			),
 			gz_spawn_launch,

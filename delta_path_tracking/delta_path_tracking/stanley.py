@@ -350,7 +350,8 @@ class StanleyNode(Node):
             return
 
         goal_dist = math.hypot(goal_pose_b.pose.position.x, goal_pose_b.pose.position.y)
-        if goal_dist <= self.goal_tol:
+        n = len(self.path)
+        if goal_dist <= self.goal_tol and (n - self.last_closest_index <= 100):
             if self.use_start_flag and self.start_flag:
                 self.get_logger().info(
                     "Goal reached. Stopping and waiting for next /start signal."
@@ -467,7 +468,7 @@ class StanleyNode(Node):
         closest_idx: Optional[int] = None
         closest_dist_sq = float("inf")
 
-        for i in range(start, n):
+        for i in range(start, min(start + 100, n)):
             xy = self._get_transformed_xy(i, tf, cache)
             if xy is None:
                 continue
