@@ -503,7 +503,7 @@ class PurePursuitNode(Node):
 
         best_fallback = None  # last pose ahead, in case none reaches Ld
 
-        for i in range(int(start), n):
+        for i in range(int(start), min(int(start) + 100, n)):  # Limit the search
             pose_b = self.transform_pose_to_base(self.path[i], tf)
             if pose_b is None:
                 continue
