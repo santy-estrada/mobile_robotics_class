@@ -266,7 +266,7 @@ global_costmap:
 # file & provide full path to map below. If CLI map configuration or launch default is provided, that will be used.
 map_server:
   ros__parameters:
-    yaml_filename: "/home/santy-estrada/mrad_ws_2601_delta/src/delta_gazebo/maps/obs_race_track"
+    yaml_filename: "/home/santy-estrada/mrad_ws_2601_delta/src/delta_gazebo/maps/obs_race_track.yaml"
 
 map_saver:
   ros__parameters:
