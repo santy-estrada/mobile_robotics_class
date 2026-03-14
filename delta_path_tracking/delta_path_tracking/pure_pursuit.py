@@ -48,6 +48,7 @@ class PurePursuitNode(Node):
         self.declare_parameter("max_speed", 10.0)            # m/s
         self.declare_parameter("max_omega", 1.5)            # rad/s
         self.declare_parameter("goal_tolerance", 0.25)      # m
+        self.declare_parameter("goal_index_window", 100)    # points from end required to accept goal
         self.declare_parameter("use_StartFlag", True)
         self.declare_parameter("use_ttc", True)
         self.declare_parameter("use_narrow_section_speed_reduction", True)
@@ -93,6 +94,7 @@ class PurePursuitNode(Node):
         self.max_speed = float(self.get_parameter("max_speed").value)
         self.max_omega = float(self.get_parameter("max_omega").value)
         self.goal_tol = float(self.get_parameter("goal_tolerance").value)
+        self.goal_index_window = int(self.get_parameter("goal_index_window").value)
         self.use_start_flag = bool(self.get_parameter("use_StartFlag").value)
         self.use_ttc = bool(self.get_parameter("use_ttc").value)
         self.use_narrow_section_speed_reduction = bool(
@@ -239,6 +241,11 @@ class PurePursuitNode(Node):
             f"Adaptive speed: {self.use_adaptative_v} "
             f"(v_min={self.v_min:.2f}, v_max={self.v_adapt_max:.2f}, kv_heading={self.kv_heading:.2f}, "
             f"alpha={self.v_smoothing_alpha:.2f})"
+        )
+        self.get_logger().info(
+            "Goal gating enabled "
+            f"(goal_tolerance={self.goal_tol:.2f} m, index_window={self.goal_index_window} points, "
+            "<=0 disables gate)."
         )
 
     def start_callback(self, msg: Bool) -> None:
@@ -397,8 +404,18 @@ class PurePursuitNode(Node):
         goal_dx = goal_pose_b.pose.position.x
         goal_dy = goal_pose_b.pose.position.y
         goal_dist = math.hypot(goal_dx, goal_dy)
+        n = len(self.path)
 
-        if goal_dist <= self.goal_tol:
+        # Mirror Stanley-style "near-end" gating to avoid immediate goal on closed loops.
+        # If window <= 0, disable this gate and keep original tolerance-only behavior.
+        if self.goal_index_window <= 0:
+            goal_window_reached = True
+        else:
+            # Clamp the effective window so it remains meaningful on short paths.
+            effective_goal_window = min(self.goal_index_window, max(n - 1, 1))
+            goal_window_reached = (n <= 1) or (n - self.last_target_index <= effective_goal_window)
+
+        if goal_dist <= self.goal_tol and goal_window_reached:
             if self.use_start_flag and self.start_flag:
                 self.get_logger().info(
                     "Goal reached. Stopping and waiting for next /start signal."
