@@ -44,12 +44,18 @@ class StanleyNode(Node):
 
         # Control
         self.declare_parameter("control_rate_hz", 10.0)
-        self.declare_parameter("v_nominal", 1.0)      # m/s (kept constant)
+        self.declare_parameter("v_nominal", 1.0)      # m/s
+        self.declare_parameter("v_min", 0.2)
+        self.declare_parameter("v_max", 5.0)
+        self.declare_parameter("kv1", 1.5)             # Speed proportional gain for dynamic velocity scaling based on cross-track error
+        self.declare_parameter("kv2", 2.0)             # Speed proportional gain for dynamic velocity scaling based on heading error
         self.declare_parameter("max_omega", 1.5)      # rad/s
-        self.declare_parameter("goal_tolerance", 0.25)
+        self.declare_parameter("goal_tolerance", 0.45)
+
+        self.declare_parameter("adaptative_v", True)
 
         # Stanley control parameters
-        self.declare_parameter("stanley_k", 1.0)
+        self.declare_parameter("stanley_k", 2.0)
         self.declare_parameter("velocity_softening", 0.1)
         self.declare_parameter("use_StartFlag", True)
         self.declare_parameter("use_ttc", True)
@@ -78,6 +84,11 @@ class StanleyNode(Node):
 
         self.rate_hz = max(float(self.get_parameter("control_rate_hz").value), 1.0)
         self.v_nominal = max(float(self.get_parameter("v_nominal").value), 0.0)
+        self.v_min = max(float(self.get_parameter("v_min").value), 0.0)
+        self.v_max = max(float(self.get_parameter("v_max").value), self.v_min)
+        self.kv1 = max(float(self.get_parameter("kv1").value), 0.0)
+        self.kv2 = max(float(self.get_parameter("kv2").value), 0.0)
+        self.use_adaptative_v = bool(self.get_parameter("adaptative_v").value)
         self.max_omega = float(self.get_parameter("max_omega").value)
         self.goal_tol = float(self.get_parameter("goal_tolerance").value)
 
@@ -192,7 +203,8 @@ class StanleyNode(Node):
 
         self.get_logger().info(
             f"Stanley controller listening on {self.path_topic}, publishing {self.cmd_topic}, "
-            f"v={self.v_nominal:.2f} m/s, rate={self.rate_hz:.1f} Hz"
+            f"v={self.v_nominal:.2f} m/s, rate={self.rate_hz:.1f} Hz, "
+            f"adaptive_v={self.use_adaptative_v}"
         )
 
     def start_callback(self, msg: Bool):
@@ -282,7 +294,7 @@ class StanleyNode(Node):
 
         if ttc_warning:
             # Warning mode should still steer away, but less aggressively than full brake mode.
-            omega_avoid *= 0.9
+            omega_avoid *= 0.5
 
         omega_avoid = clamp(omega_avoid, -self.max_omega_ttc, self.max_omega_ttc)
 
@@ -364,7 +376,18 @@ class StanleyNode(Node):
         self.last_closest_index = idx
 
         # 4) Stanley control law: delta = heading_error + atan2(k * e_ct, v)
-        v_cmd = self.v_nominal
+        if self.use_adaptative_v:
+            # Reduce speed when cross-track error is large to improve stability.
+            v_cmd = clamp(
+                self.v_min
+                + (self.v_max - self.v_min)
+                * math.exp(-self.kv1 * abs(cross_track_error))
+                * math.exp(-self.kv2 * abs(heading_error)),
+                self.v_min,
+                self.v_max,
+            )
+        else:
+            v_cmd = self.v_nominal
         denom = max(abs(v_cmd), self.v_soft, self.eps)
         delta = heading_error + math.atan2(
             self.k_stanley * cross_track_error,
