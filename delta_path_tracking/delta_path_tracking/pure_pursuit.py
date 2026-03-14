@@ -8,6 +8,7 @@ from rclpy.duration import Duration
 
 from geometry_msgs.msg import TwistStamped, PoseStamped
 from nav_msgs.msg import Path
+from std_msgs.msg import Bool
 
 import tf2_ros
 from tf2_ros import TransformException
@@ -42,6 +43,7 @@ class PurePursuitNode(Node):
         self.declare_parameter("max_speed", 10.0)            # m/s
         self.declare_parameter("max_omega", 1.5)            # rad/s
         self.declare_parameter("goal_tolerance", 0.25)      # m
+        self.declare_parameter("use_StartFlag", True)
 
         # Lookahead: Ld = clamp(L0 + k*v, Lmin, Lmax)
         self.declare_parameter("lookahead_L0", 0.6)         # m
@@ -66,6 +68,7 @@ class PurePursuitNode(Node):
         self.max_speed = float(self.get_parameter("max_speed").value)
         self.max_omega = float(self.get_parameter("max_omega").value)
         self.goal_tol = float(self.get_parameter("goal_tolerance").value)
+        self.use_start_flag = bool(self.get_parameter("use_StartFlag").value)
 
         self.L0 = float(self.get_parameter("lookahead_L0").value)
         self.kv = float(self.get_parameter("lookahead_kv").value)
@@ -78,6 +81,18 @@ class PurePursuitNode(Node):
         # ---- ROS interfaces
         self.cmd_pub = self.create_publisher(TwistStamped, self.cmd_topic, 10)
         self.path_sub = self.create_subscription(Path, self.path_topic, self.on_path, 10)
+
+        self.start_flag = not self.use_start_flag
+        if self.use_start_flag:
+            self.get_logger().info("Start flag mode enabled. Waiting for /start signal to begin.")
+            self.start_sub = self.create_subscription(
+                Bool,
+                "/start",
+                self.start_callback,
+                10,
+            )
+        else:
+            self.get_logger().info("Start flag mode disabled.")
 
         # ---- TF buffer/listener
         self.tf_buffer = tf2_ros.Buffer(cache_time=Duration(seconds=5.0))
@@ -95,6 +110,12 @@ class PurePursuitNode(Node):
 
         self.get_logger().info(f"Pure Pursuit listening on {self.path_topic}, publishing {self.cmd_topic}")
 
+    def start_callback(self, msg: Bool) -> None:
+        if msg.data:
+            if not self.start_flag:
+                self.get_logger().info("Received start signal. Starting control.")
+            self.start_flag = True
+
     def on_path(self, msg: Path) -> None:
         self.path = list(msg.poses)
         self.path_frame = msg.header.frame_id if msg.header.frame_id else None
@@ -108,6 +129,10 @@ class PurePursuitNode(Node):
 
     def on_timer(self) -> None:
         if not self.has_path:
+            self.publish_stop()
+            return
+
+        if self.use_start_flag and not self.start_flag:
             self.publish_stop()
             return
 
@@ -135,6 +160,11 @@ class PurePursuitNode(Node):
         goal_dist = math.hypot(goal_dx, goal_dy)
 
         if goal_dist <= self.goal_tol:
+            if self.use_start_flag and self.start_flag:
+                self.get_logger().info(
+                    "Goal reached. Stopping and waiting for next /start signal."
+                )
+                self.start_flag = False
             self.publish_stop()
             return
 
