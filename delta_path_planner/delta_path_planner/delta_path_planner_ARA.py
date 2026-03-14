@@ -58,13 +58,19 @@ class ARAPlannerNode(Node):
         # Opciones de grilla
         self.declare_parameter('geometry.occupied_threshold', 65)
         self.declare_parameter('geometry.use_8_connected', True)
-        self.declare_parameter('geometry.inflate_radius', 0.7)
         self.declare_parameter('geometry.treat_unknown_as_obstacle', True)
+
+        # Parametros de inflacion (misma estrategia que Best First)
+        self.occ_thresh = self.declare_parameter('occ_thresh', 100).value
+        self.robot_radius_m = self.declare_parameter('robot_radius_m', 0.6).value
+        self.safety_margin_m = self.declare_parameter('safety_margin_m', 0.05).value
+        # Se mantiene por compatibilidad con launch existentes.
+        self.declare_parameter('geometry.inflate_radius', 0.7)
 
         # --- ParÃ¡metros NUEVOS para ARA* ---
         self.declare_parameter('ara_core.epsilon_start', 2.5)       # InflaciÃ³n inicial (Modo rÃ¡pido)
         self.declare_parameter('ara_core.epsilon_decrease', 0.5)    # CuÃ¡nto baja en cada iteraciÃ³n
-        self.declare_parameter('ara_core.time_limit_sec', 0.5)      # Presupuesto de tiempo total
+        self.declare_parameter('ara_core.time_limit_sec', 1.5)      # Presupuesto de tiempo total
         self.declare_parameter('ara_core.heuristic_type', 'euclidean')
 
         self.declare_parameter('debug.publish_all_paths', False)
@@ -119,7 +125,9 @@ class ARAPlannerNode(Node):
             f"- Time Limit (sec): {self.get_parameter('ara_core.time_limit_sec').get_parameter_value().double_value}" \
             f"- Heuristic Type: {self.get_parameter('ara_core.heuristic_type').get_parameter_value().string_value}" \
             f"- Use 8-Connected: {self.get_parameter('geometry.use_8_connected').get_parameter_value().bool_value}" \
-            f"- Inflate Radius: {self.get_parameter('geometry.inflate_radius').get_parameter_value().double_value}")
+            f"- Inflation Occ Thresh: {self.occ_thresh}" \
+            f"- Robot Radius (m): {self.robot_radius_m}" \
+            f"- Safety Margin (m): {self.safety_margin_m}")
 
         self.get_logger().info("ARA* Planner Node Iniciado y esperando el mapa...")
 
@@ -127,35 +135,43 @@ class ARAPlannerNode(Node):
     # CALLBACKS DE ROS 2
     # =================================================================
     def map_cb(self, msg: OccupancyGrid):
-        """Recibe el mapa, lo guarda y pre-calcula los obstÃ¡culos (Brushfire)."""
+        """Recibe el mapa, lo infla como Best First y prepara obstaculos para ARA*."""
         self._map = msg
         W = msg.info.width
         H = msg.info.height
         res = msg.info.resolution
 
         grid = np.array(msg.data, dtype=np.int16).reshape((H, W))  # row-major: y first
-        self._grid = grid
+
+        # Inflacion estilo Best First: semilla por occ_thresh y radio en celdas
+        inflation_cells = max(
+            0,
+            int(np.floor((float(self.robot_radius_m) + float(self.safety_margin_m)) / res))
+        )
+        inflated_mask = self.make_inflation_mask(grid, inflation_cells, int(self.occ_thresh))
+
+        inflated_grid = grid.copy()
+        inflated_grid[inflated_mask] = 80  # Hard inflation
+        self._grid = inflated_grid
 
         occ_th = self.get_parameter('geometry.occupied_threshold').get_parameter_value().integer_value
         unknown_as_obs = self.get_parameter('geometry.treat_unknown_as_obstacle').get_parameter_value().bool_value
 
-        obstacles = (grid >= occ_th)
+        obstacles = (inflated_grid >= occ_th)
         if unknown_as_obs:
-            obstacles = np.logical_or(obstacles, grid == -1)
-
-        # Precompute distance-to-obstacle field (in cells) from the raw obstacles.
-        # This is useful for both inflation and soft traversal costs.
-        dist_cells = self.compute_distance_to_obstacles(obstacles)
-        self._dist_cells = dist_cells
-
-        # Inflate obstacles if requested (uses distance field: dist <= R).
-        inflate_radius = float(self.get_parameter('geometry.inflate_radius').get_parameter_value().double_value)
-        if inflate_radius > 1e-6:
-            inflation_cells = int(math.ceil(inflate_radius / res))
-            obstacles = np.logical_or(obstacles, dist_cells <= inflation_cells)
+            obstacles = np.logical_or(obstacles, inflated_grid == -1)
 
         self._obstacles = obstacles
-        self.get_logger().info(f'Map received: {W}x{H}, res={res:.3f} m/px')
+        self.get_logger().info(
+            f'Map received: {W}x{H}, res={res:.3f} m/px, inflation_cells={inflation_cells}'
+        )
+
+    def make_inflation_mask(self, grid: np.ndarray, inflation_cells: int, occ_thresh: int) -> np.ndarray:
+        """Devuelve mascara booleana (H,W) con inflacion tipo Best First."""
+        occ = (grid >= occ_thresh)
+        dist_cells = self.compute_distance_to_obstacles(occ)
+        self._dist_cells = dist_cells
+        return dist_cells <= inflation_cells
 
     def compute_distance_to_obstacles(self, obstacles: np.ndarray) -> np.ndarray:
         """Brushfire / multi-source BFS distance transform (4-connected).

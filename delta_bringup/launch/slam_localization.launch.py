@@ -47,7 +47,7 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': use_sim_time,
             'mode': 'localization',
-            'map_file_name': '/home/santy-estrada/mrad_ws_2601_delta/src/delta_gazebo/maps/empty_race_track2_ser',
+            'map_file_name': '/home/santy-estrada/mrad_ws_2601_delta/src/delta_gazebo/maps/obs_race_track_ser',
             'map_start_pose': [0.0, 0.0, 0.0],
             'map_frame': 'map',
             'odom_frame': 'odom',

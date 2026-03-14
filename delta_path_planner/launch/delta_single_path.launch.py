@@ -14,6 +14,7 @@ def generate_launch_description():
 	use_amcl = LaunchConfiguration("use_amcl")
 	use_waypoints = LaunchConfiguration("use_waypoints")
 	planner_index = LaunchConfiguration("planner_index")
+	inflate_radius = LaunchConfiguration("inflate_radius")
 
 	bringup_share = get_package_share_directory("delta_bringup")
 	ekf_share = get_package_share_directory("delta_ekf")
@@ -50,7 +51,7 @@ def generate_launch_description():
 						"use_sim_time": use_sim_time,
 						"waypoints": use_waypoints,
 						"topics.path_topic": "/planned_path",
-						"geometry.inflate_radius": 0.65,
+						"geometry.inflate_radius": inflate_radius,
 					}
 				],
 				condition=IfCondition(EqualsSubstitution(planner_index, str(idx))),
@@ -118,6 +119,11 @@ def generate_launch_description():
 				"use_waypoints",
 				default_value="true",
 				description="If true planner listens to /waypoints_topic and launches waypoints_node.",
+			),
+			DeclareLaunchArgument(
+				"inflate_radius",
+				default_value="0.65",
+				description="Obstacle inflation radius in meters for planner nodes.",
 			),
 			gz_spawn_launch,
 			ekf_after_spawn,

@@ -42,7 +42,7 @@ class PurePursuitNode(Node):
         self.declare_parameter("v_nominal", 4.5)           # m/s
         self.declare_parameter("adaptative_v", True)
         self.declare_parameter("v_min", 1.0)
-        self.declare_parameter("v_max", 5.0)
+        self.declare_parameter("v_max", 5.5)
         self.declare_parameter("kv_heading", 1.0)
         self.declare_parameter("v_smoothing_alpha", 0.3)
         self.declare_parameter("max_speed", 10.0)            # m/s
