@@ -30,7 +30,7 @@ def generate_launch_description():
 				"control_rate_hz": 10.0,
 				"goal_tolerance": 0.45,
 				"v_min": 0.2,
-				"v_max": 5.0,
+				"v_max": 4.75,
 				"kv1":1.6,
 				"kv2": 2.3,
 				"adaptative_v":True,
