@@ -67,10 +67,10 @@ def generate_launch_description():
 		output="screen",
 		parameters=[{"use_sim_time": use_sim_time,
 			   "use_start": False,
-			   "manual": True,
+			   "manual": False,
 			   "closed_loop": True,
-			   "num_points": 20,
-			   "waypoints_file": "/home/santy-estrada/mrad_ws_2601_delta/src/delta_path_planner/waypoints_json/sample_waypoints.json"}],
+			   "num_points": 40,
+			   "waypoints_file": "/home/santy-estrada/mrad_ws_2601_delta/src/delta_path_planner/waypoints_json/one_lap.json"}],
 		condition=IfCondition(use_waypoints),
 	)
 
@@ -94,7 +94,7 @@ def generate_launch_description():
 	# Stagger startup so Gazebo and robot interfaces are available first.
 	ekf_after_spawn = TimerAction(period=2.0, actions=[ekf_launch])
 	planners_after_ekf = TimerAction(period=3.0, actions=planner_nodes)
-	waypoints_after_ekf = TimerAction(period=3.0, actions=[waypoints_node])
+	waypoints_after_ekf = TimerAction(period=5.0, actions=[waypoints_node])
 	localization_after_planners = TimerAction(
 		period=4.0,
 		actions=[amcl_localization_launch, slam_localization_launch],
@@ -124,7 +124,7 @@ def generate_launch_description():
 			),
 			DeclareLaunchArgument(
 				"use_start",
-				default_value="true",
+				default_value="false",
 				description="If true, planner publishes path only after /start in waypoint mode.",
 			),
 			DeclareLaunchArgument(
