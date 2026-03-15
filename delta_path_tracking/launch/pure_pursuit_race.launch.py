@@ -35,7 +35,7 @@ def generate_launch_description():
 				"pub_errs": True,
 				"pub_debug": False,
 				"lookahead_kv": 0.4,
-				"narrow_speed_factor": 0.9
+				"narrow_speed_factor": 0.95
 			}
 		],
 	)
