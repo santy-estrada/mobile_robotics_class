@@ -1,0 +1,1 @@
+row_type,timestamp_s,elapsed_s,v_real,w_real,brake,x,y,distance_m,heading_error_rad,cross_track_error_m,controller_error,path_index,path_x,path_y

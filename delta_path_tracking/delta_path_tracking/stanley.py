@@ -65,9 +65,9 @@ class StanleyNode(Node):
         self.declare_parameter("ttc_turn_boost", 0.7)
         self.declare_parameter("max_omega_ttc", 2.5)
         self.declare_parameter("pub_errs", True)
-        self.declare_parameter("cross_track_error_topic", "/stanley/cross_track_error")
-        self.declare_parameter("heading_error_topic", "/stanley/heading_error")
-        self.declare_parameter("delta_topic", "/stanley/delta")
+        self.declare_parameter("cross_track_error_topic", "/cross_track_error")
+        self.declare_parameter("heading_error_topic", "/heading_error")
+        self.declare_parameter("delta_topic", "/delta")
         self.declare_parameter("pub_debug", True)
 
 
