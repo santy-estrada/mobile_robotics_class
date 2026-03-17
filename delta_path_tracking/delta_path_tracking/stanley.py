@@ -395,9 +395,10 @@ class StanleyNode(Node):
             self.k_stanley * cross_track_error,
             denom,
         )
-        self.publish_error_signals(cross_track_error, heading_error, delta)
         delta = wrap_to_pi(delta)
-        omega = v_cmd * math.tan(self.apply_ttc_turn_assist(delta)) / 0.2
+        self.publish_error_signals(cross_track_error, heading_error, delta)
+        delta_cmd = self.apply_ttc_turn_assist(delta)
+        omega = v_cmd * math.tan(delta_cmd) / 0.2
         omega = 0.7 * self.prev_omega + 0.3 * omega
         omega = clamp(omega, -self.max_omega, self.max_omega)
 

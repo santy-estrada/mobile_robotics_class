@@ -70,7 +70,7 @@ def generate_launch_description():
 			   "manual": False,
 			   "closed_loop": True,
 			   "num_points": 40,
-			   "waypoints_file": "/home/santy-estrada/mrad_ws_2601_delta/src/delta_path_planner/waypoints_json/two_laps.json"}],
+			   "waypoints_file": "/home/santy-estrada/mrad_ws_2601_delta/src/delta_path_planner/waypoints_json/one_lap.json"}],
 		condition=IfCondition(use_waypoints),
 	)
 
