@@ -29,6 +29,7 @@ setup(
         'console_scripts': [
             'dist_finder = delta_wall_following.dist_finder:main',
             'control = delta_wall_following.control:main',
+            'orientation_control = delta_wall_following.orientation_control:main'
         ],
     },
 )
