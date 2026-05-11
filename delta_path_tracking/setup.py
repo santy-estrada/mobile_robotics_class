@@ -31,6 +31,7 @@ setup(
             'pure_pursuit_node = delta_path_tracking.pure_pursuit:main',
             'stanley_node = delta_path_tracking.stanley:main',
             'mpc_node = delta_path_tracking.mpc:main',
+            'rc_pure_pursuit_node = delta_path_tracking.rc_pure_pursuit:main',
         ],
     },
 )
