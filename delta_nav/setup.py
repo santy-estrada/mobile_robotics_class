@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'ttc_break_node = delta_nav.ttc_break_node:main',
             'start_controller = delta_nav.start_controller:main',
+            'rc_ttc_brake_node = delta_nav.rc_ttc_brake_node:main',
         ],
     },
 )
