@@ -21,26 +21,26 @@ def generate_launch_description():
 		"cmd_vel_topic": "/cmd_vel_nav",
 		"use_StartFlag": True,
 		"use_ttc": True,
-		"control_rate_hz": 10.0,
+		"control_rate_hz": 20.0, #10 original
 		"goal_tolerance": 0.3,
-		"max_cmd_velocity": 2.31,
-		"speed_adaptive_min": 2.30,
-		"speed_heading_coupling": 0.5,
-		"cmd_smoothing_factor": 0.3,
-		"error_threshold": 10.0,
+		"max_cmd_velocity": 2.80,
+		"speed_adaptive_min": 2.80,
+		"speed_heading_coupling": 0.5, # 0.5 original
+		"cmd_smoothing_factor": 0.2, # 0.3 original
+		"error_threshold": 10.0, # 10.0 original
 		"use_speed_adaptive": True,
 		"speed_nominal": 2.6,
 		"pub_errs": True,
 		"pub_debug": False,
-		"lookahead_L0": 0.9,
-		"lookahead_kv": 0.4,
-		"lookahead_min": 0.9,
-		"lookahead_max": 2.0,
+		"lookahead_L0": 0.9, # 0.9 original
+		"lookahead_kv": 0.7, # 0.7 original
+		"lookahead_min": 1.0, # 1.0 original
+		"lookahead_max": 2.7	, # 2.0 original
 	}
 
 	ttc_break_params = {
 		"use_sim_time": use_sim_time,
-		"ttc_threshold": 1.0,
+		"ttc_threshold": 0.5,
 		"min_distance_threshold": 0.4,
 		"forward_angle_range": 20.0,
 		"safety_bubble": True,

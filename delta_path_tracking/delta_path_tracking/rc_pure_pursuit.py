@@ -33,7 +33,7 @@ def signal_to_angle_deg(signal: float) -> float:
 
 def angle_deg_to_signal(target_angle_deg: float) -> float:
     # Keep requested limit at +/-33 deg and always enforce signal hardware limits.
-    target_angle_deg = clamp(target_angle_deg, -33.0, 33.0)
+    target_angle_deg = clamp(target_angle_deg, -25.0, 25.0)
     if target_angle_deg == 0.0:
         return 0.0
 
@@ -89,7 +89,7 @@ class PurePursuitNode(Node):
         self.declare_parameter("delta_topic", "/delta")
         self.declare_parameter("use_ackermann_steering_cmd", True)
         self.declare_parameter("wheelbase", 0.25) 
-        self.declare_parameter("steering_angle_limit_deg", 33.0)
+        self.declare_parameter("steering_angle_limit_deg", 25.0)
 
         # Lookahead: Ld = clamp(L0 + k*v, Lmin, Lmax)
         self.declare_parameter("lookahead_L0", 0.6)         # m
@@ -464,20 +464,20 @@ class PurePursuitNode(Node):
         # kappa = 2*by / Ld^2
         heading_error = math.atan2(by, bx)
         if self.use_speed_adaptive:
-            if heading_error >= math.radians(self.error_threshold):
+            if heading_error >= abs(math.radians(self.error_threshold)):
                 if self.pub_debug:
                     self.get_logger().warn(
                         f"Heading error: {math.degrees(heading_error):.1f} deg, "
-                        f"adjusting speed with coupling factor {self.speed_heading_coupling:.2f}."
                     )
                 v_cmd = self.speed_nominal
             else:
-                v_target = self.speed_adaptive_min + (self.max_cmd_velocity - self.speed_adaptive_min) * math.exp(
-                    -self.speed_heading_coupling * abs(heading_error)
-                )
-                v_target = clamp(v_target, self.speed_adaptive_min, self.max_cmd_velocity)
-                v_cmd = (1.0 - self.cmd_smoothing_factor) * self.prev_v_cmd + self.cmd_smoothing_factor * v_target
-                v_cmd = clamp(v_cmd, self.speed_adaptive_min, self.max_cmd_velocity)
+                # v_target = self.speed_adaptive_min + (self.max_cmd_velocity - self.speed_adaptive_min) * math.exp(
+                #     -self.speed_heading_coupling * abs(heading_error)
+                # )
+                # v_target = clamp(v_target, self.speed_adaptive_min, self.max_cmd_velocity)
+                # v_cmd = (1.0 - self.cmd_smoothing_factor) * self.prev_v_cmd + self.cmd_smoothing_factor * v_target
+                # v_cmd = clamp(v_cmd, self.speed_adaptive_min, self.max_cmd_velocity)
+                v_cmd = self.max_cmd_velocity
             # v_cmd = self.apply_ttc_brake_speed_reduction(v_cmd, self.max_cmd_velocity)
         else:
             v_cmd = self.speed_nominal
@@ -499,6 +499,9 @@ class PurePursuitNode(Node):
             steering_angle_deg = math.degrees(steering_angle_rad)
             steering_signal = angle_deg_to_signal(steering_angle_deg)
             omega_out = steering_signal
+            self.get_logger().info(
+                f"steering_angle={steering_angle_deg:.1f} deg, signal={steering_signal:.2f}"
+            )
         else:
             omega = self.apply_ttc_turn_assist(omega)
 
