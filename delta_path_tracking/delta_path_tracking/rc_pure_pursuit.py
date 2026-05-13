@@ -69,6 +69,7 @@ class PurePursuitNode(Node):
         self.declare_parameter("speed_adaptive_min", 0.5)         # m/s - minimum speed in adaptive mode
         self.declare_parameter("speed_heading_coupling", 1.0)     # How much heading error affects speed
         self.declare_parameter("cmd_smoothing_factor", 0.3)       # Smoothing alpha for speed command
+        self.declare_parameter("error_threshold", 10.0)
         self.declare_parameter("max_omega", 1.5)            # rad/s
         self.declare_parameter("goal_tolerance", 0.25)      # m
         self.declare_parameter("goal_index_window", 100)    # points from end required to accept goal
@@ -86,8 +87,8 @@ class PurePursuitNode(Node):
         self.declare_parameter("cross_track_error_topic", "/cross_track_error")
         self.declare_parameter("heading_error_topic", "/heading_error")
         self.declare_parameter("delta_topic", "/delta")
-        self.declare_parameter("use_ackermann_steering_cmd", False)
-        self.declare_parameter("wheelbase", 0.30)
+        self.declare_parameter("use_ackermann_steering_cmd", True)
+        self.declare_parameter("wheelbase", 0.25) 
         self.declare_parameter("steering_angle_limit_deg", 33.0)
 
         # Lookahead: Ld = clamp(L0 + k*v, Lmin, Lmax)
@@ -116,6 +117,7 @@ class PurePursuitNode(Node):
         self.speed_adaptive_min = max(float(self.get_parameter("speed_adaptive_min").value), 0.0)
         self.speed_heading_coupling = max(float(self.get_parameter("speed_heading_coupling").value), 0.0)
         self.cmd_smoothing_factor = clamp(float(self.get_parameter("cmd_smoothing_factor").value), 0.0, 1.0)
+        self.error_threshold = float(self.get_parameter("error_threshold").value)
         self.max_omega = float(self.get_parameter("max_omega").value)
         self.goal_tol = float(self.get_parameter("goal_tolerance").value)
         self.goal_index_window = int(self.get_parameter("goal_index_window").value)
@@ -462,16 +464,24 @@ class PurePursuitNode(Node):
         # kappa = 2*by / Ld^2
         heading_error = math.atan2(by, bx)
         if self.use_speed_adaptive:
-            v_target = self.speed_adaptive_min + (self.max_cmd_velocity - self.speed_adaptive_min) * math.exp(
-                -self.speed_heading_coupling * abs(heading_error)
-            )
-            v_target = clamp(v_target, self.speed_adaptive_min, self.max_cmd_velocity)
-            v_cmd = (1.0 - self.cmd_smoothing_factor) * self.prev_v_cmd + self.cmd_smoothing_factor * v_target
-            v_cmd = clamp(v_cmd, self.speed_adaptive_min, self.max_cmd_velocity)
-            v_cmd = self.apply_ttc_brake_speed_reduction(v_cmd, self.max_cmd_velocity)
+            if heading_error >= math.radians(self.error_threshold):
+                if self.pub_debug:
+                    self.get_logger().warn(
+                        f"Heading error: {math.degrees(heading_error):.1f} deg, "
+                        f"adjusting speed with coupling factor {self.speed_heading_coupling:.2f}."
+                    )
+                v_cmd = self.speed_nominal
+            else:
+                v_target = self.speed_adaptive_min + (self.max_cmd_velocity - self.speed_adaptive_min) * math.exp(
+                    -self.speed_heading_coupling * abs(heading_error)
+                )
+                v_target = clamp(v_target, self.speed_adaptive_min, self.max_cmd_velocity)
+                v_cmd = (1.0 - self.cmd_smoothing_factor) * self.prev_v_cmd + self.cmd_smoothing_factor * v_target
+                v_cmd = clamp(v_cmd, self.speed_adaptive_min, self.max_cmd_velocity)
+            # v_cmd = self.apply_ttc_brake_speed_reduction(v_cmd, self.max_cmd_velocity)
         else:
             v_cmd = self.speed_nominal
-            v_cmd = self.apply_ttc_brake_speed_reduction(v_cmd, self.max_cmd_velocity)
+            # v_cmd = self.apply_ttc_brake_speed_reduction(v_cmd, self.max_cmd_velocity)
         v_cmd = clamp(v_cmd, 0.0, self.max_cmd_velocity)
 
         cross_track_error = by

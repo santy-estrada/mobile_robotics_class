@@ -17,7 +17,6 @@ def generate_launch_description():
 	inflate_radius = LaunchConfiguration("inflate_radius")
 
 	bringup_share = get_package_share_directory("delta_bringup")
-	ekf_share = get_package_share_directory("delta_ekf")
 
 	# (index, node_name, executable)
 	planners = [
@@ -53,9 +52,9 @@ def generate_launch_description():
 		output="screen",
 		parameters=[{
 			   "use_start": False,
-			   "manual": False,
+			   "manual": True,
 			   "closed_loop": True,
-			   "num_points": 40,
+			   "num_points": 5,
 			   "waypoints_file": "/home/santy-estrada/mrad_ws_2601_delta/src/delta_path_planner/waypoints_json/one_lap.json"}],
 		condition=IfCondition(use_waypoints),
 	)
@@ -97,7 +96,7 @@ def generate_launch_description():
 			),
 			DeclareLaunchArgument(
 				"use_waypoints",
-				default_value="false",
+				default_value="true",
 				description="If true planner listens to /waypoints_topic and launches waypoints_node.",
 			),
 			DeclareLaunchArgument(
@@ -112,6 +111,6 @@ def generate_launch_description():
 			),
 			planners_after_ekf,
 			waypoints_after_ekf,
-			localization_after_planners,
+			# localization_after_planners,
 		]
 	)
