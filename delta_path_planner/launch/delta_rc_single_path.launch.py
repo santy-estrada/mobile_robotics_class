@@ -52,10 +52,10 @@ def generate_launch_description():
 		output="screen",
 		parameters=[{
 			   "use_start": False,
-			   "manual": True,
-			   "closed_loop": True,
-			   "num_points": 6,
-			   "waypoints_file": "/home/santy-estrada/mrad_ws_2601_delta/src/delta_path_planner/waypoints_json/one_lap.json"}],
+			   "manual": False,
+			   "closed_loop": False,
+			   "num_points": 10,
+			   "waypoints_file": "/home/santy-estrada/mrad_ws_2601_delta/src/delta_path_planner/waypoints_json/rc_one_lap.json"}],
 		condition=IfCondition(use_waypoints),
 	)
 
