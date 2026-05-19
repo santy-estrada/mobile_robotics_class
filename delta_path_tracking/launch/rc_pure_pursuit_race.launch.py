@@ -22,14 +22,14 @@ def generate_launch_description():
 		"use_StartFlag": True,
 		"use_ttc": True,
 		"control_rate_hz": 20.0, #10 original
-		"goal_tolerance": 0.3,
-		"max_cmd_velocity": 2.60,
-		"speed_adaptive_min": 2.60,
+		"goal_tolerance": 0.5,
+		"max_cmd_velocity": 2.65,
+		"speed_adaptive_min": 2.62,
 		"speed_heading_coupling": 0.5, # 0.5 original
 		"cmd_smoothing_factor": 0.2, # 0.3 original
-		"error_threshold": 10.0, # 10.0 original
+		"error_threshold": 14.0, # 10.0 original
 		"use_speed_adaptive": True,
-		"speed_nominal": 2.6,
+		"speed_nominal": 2.51,
 		"pub_errs": True,
 		"pub_debug": False,
 		"lookahead_L0": 0.9, # 0.9 original
@@ -40,10 +40,10 @@ def generate_launch_description():
 
 	ttc_break_params = {
 		"use_sim_time": use_sim_time,
-		"ttc_threshold": 0.5,
-		"min_distance_threshold": 0.4,
-		"forward_angle_range": 20.0,
-		"safety_bubble": True,
+		"ttc_threshold": 0.0,
+		"min_distance_threshold": 0.35,
+		"forward_angle_range": 10.0,
+		"safety_bubble": False,
 		"heartbeat_rate_hz": 1.0,
 	}
 

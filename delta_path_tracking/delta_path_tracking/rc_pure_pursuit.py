@@ -33,7 +33,7 @@ def signal_to_angle_deg(signal: float) -> float:
 
 def angle_deg_to_signal(target_angle_deg: float) -> float:
     # Keep requested limit at +/-33 deg and always enforce signal hardware limits.
-    target_angle_deg = clamp(target_angle_deg, -32.0, 32.0)
+    target_angle_deg = clamp(target_angle_deg, -25.0, 25.0)
     if target_angle_deg == 0.0:
         return 0.0
 
@@ -89,7 +89,7 @@ class PurePursuitNode(Node):
         self.declare_parameter("delta_topic", "/delta")
         self.declare_parameter("use_ackermann_steering_cmd", True)
         self.declare_parameter("wheelbase", 0.25) 
-        self.declare_parameter("steering_angle_limit_deg", 32.0)
+        self.declare_parameter("steering_angle_limit_deg", 25.0)
 
         # Lookahead: Ld = clamp(L0 + k*v, Lmin, Lmax)
         self.declare_parameter("lookahead_L0", 0.6)         # m
@@ -500,7 +500,7 @@ class PurePursuitNode(Node):
             steering_signal = angle_deg_to_signal(steering_angle_deg)
             omega_out = steering_signal
             self.get_logger().info(
-                f"steering_angle={steering_angle_deg:.1f} deg, signal={steering_signal:.2f}"
+                f"steering_angle={steering_angle_deg:.1f} deg, heading_error={math.degrees(heading_error):.1f} deg, "
             )
         else:
             omega = self.apply_ttc_turn_assist(omega)
