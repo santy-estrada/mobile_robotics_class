@@ -23,8 +23,8 @@ def generate_launch_description():
 		"use_ttc": True,
 		"control_rate_hz": 20.0, #10 original
 		"goal_tolerance": 0.3,
-		"max_cmd_velocity": 2.80,
-		"speed_adaptive_min": 2.80,
+		"max_cmd_velocity": 2.60,
+		"speed_adaptive_min": 2.60,
 		"speed_heading_coupling": 0.5, # 0.5 original
 		"cmd_smoothing_factor": 0.2, # 0.3 original
 		"error_threshold": 10.0, # 10.0 original
