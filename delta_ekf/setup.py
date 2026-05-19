@@ -30,6 +30,9 @@ setup(
         'console_scripts': [
             'ekf_node = delta_ekf.ekf_node:main',
             # 'imu_stamper = delta_ekf.imu_stamper:main',
+            'madgwick_filter_node = delta_ekf.madgwick_filter_node:main',
+            'encoder_subs_node = delta_ekf.encoder_subs_node:main',
+            'tf_ph_nostamp_node = delta_ekf.tf_ph_nostamp_node:main',
         ],
     },
 )

@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- Example link -->
+    <!-- <xacro:include filename="inertial_macros.xacro"/> -->
+
+    <xacro:property name="rad_w" value="0.05"/>
+    <xacro:property name="le_w" value="0.04"/>
+    <xacro:property name="lz_lidar" value="0.185"/>
+    <xacro:property name="lz_imu" value="0.1"/>
+    <xacro:property name="lz_base_link" value="0.045"/>
+    <xacro:property name="lx_offset_imu_lidar" value="0.08"/>
+    <xacro:property name="lx_offset_lidar_base_link" value="0.165"/>
+
+
+    <!-- MASAS -->
+    <xacro:property name="wheel_mass" value="2.5"/>
+    <xacro:property name="chassis_mass" value="5.0"/>
+    
+
+    <!-- base link -->
+    <link name="base_link">
+    </link>
+
+    <!-- LIDAR link -->
+    <link name="lidar_link">
+    </link>
+
+    <joint name="lidar_base_link_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="lidar_link"/>
+        <origin xyz="${lx_offset_lidar_base_link} 0 ${lz_lidar}" rpy="0 0 0"/>    
+    </joint>
+
+
+    <!-- IMU link -->
+    <link name="imu_link">
+    </link>
+
+    <joint name="imu_base_link_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="imu_link"/>
+        <origin xyz="${lx_offset_imu_lidar} 0 ${lz_imu}" rpy="0 3.1415 1.5707"/>
+    </joint>
+
+</robot>

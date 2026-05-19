@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="zulu_robot">
+
+    <!-- Example link -->
+    <!-- <xacro:include filename="properties.xacro"/> -->
+    <xacro:include filename="robot_ph_core.xacro"/>
+
+
+<!--
+    <xacro:include filename="lidar.xacro"/>
+
+    <xacro:include filename="imu.xacro"/>
+
+    <xacro:include filename="depth_camera.xacro"/>
+
+    <xacro:include filename="ros2_control.xacro"/>
+-->
+    <gazebo>
+      <plugin filename="libgz-sim-pose-publisher-system.so" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose>
+        <publish_model_pose>true</publish_model_pose>
+        <publish_nested_model_pose>true</publish_nested_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg>
+        <update_frequency>50</update_frequency>
+      </plugin>
+    </gazebo>
+
+</robot>
