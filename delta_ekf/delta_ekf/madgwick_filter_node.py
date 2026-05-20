@@ -13,7 +13,7 @@ import tf2_ros
 
 
 SAMPLE_PERIOD = 1.0 / 10.0
-BETA = 0.02
+BETA = 0.0001
 FRAME_ID = "base_link"
 
 

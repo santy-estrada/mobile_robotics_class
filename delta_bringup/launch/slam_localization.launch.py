@@ -50,7 +50,7 @@ def generate_launch_description():
             {
             'use_sim_time': use_sim_time,
             'mode': 'localization',
-            'map_file_name': '/home/santy-estrada/mrad_ws_2601_delta/src/delta_gazebo/maps/final_map_ser',
+            'map_file_name': '/home/santy-estrada/mrad_ws_2601_delta/src/delta_gazebo/maps/map_full_ser',
             'map_start_pose': [0.0, 0.0, 0.0],
             'map_frame': 'map',
             'odom_frame': 'odom',

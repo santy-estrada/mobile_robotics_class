@@ -31,6 +31,7 @@ setup(
             'best_first_node = delta_path_planner.delta_path_planner_bestFirst:main',
             'waypoints_node = delta_path_planner.waypoints:main',
             'ara_node = delta_path_planner.delta_path_planner_ARA:main',
+            'goal_saver_node = delta_path_planner.goal_saver:main',
         ],
     },
 )

@@ -84,9 +84,8 @@ class PurePursuitNode(Node):
         self.declare_parameter("max_omega_ttc", 2.5)
         self.declare_parameter("pub_debug", True)
         self.declare_parameter("pub_errs", True)
-        self.declare_parameter("cross_track_error_topic", "/cross_track_error")
         self.declare_parameter("heading_error_topic", "/heading_error")
-        self.declare_parameter("delta_topic", "/delta")
+        self.declare_parameter("kappa_topic", "/kappa")
         self.declare_parameter("use_ackermann_steering_cmd", True)
         self.declare_parameter("wheelbase", 0.25) 
         self.declare_parameter("steering_angle_limit_deg", 25.0)
@@ -133,9 +132,8 @@ class PurePursuitNode(Node):
         self.ttc_turn_boost = abs(float(self.get_parameter("ttc_turn_boost").value))
         self.pub_debug = bool(self.get_parameter("pub_debug").value)
         self.pub_errs = bool(self.get_parameter("pub_errs").value)
-        self.cross_track_error_topic = str(self.get_parameter("cross_track_error_topic").value)
         self.heading_error_topic = str(self.get_parameter("heading_error_topic").value)
-        self.delta_topic = str(self.get_parameter("delta_topic").value)
+        self.kappa_topic = str(self.get_parameter("kappa_topic").value)
         self.use_ackermann_steering_cmd = bool(
             self.get_parameter("use_ackermann_steering_cmd").value
         )
@@ -161,30 +159,23 @@ class PurePursuitNode(Node):
         self.vel_sub = self.create_subscription(Float64, self.velocity_topic, self.on_velocity, 10)
 
         # Optional error publishers
-        self.cross_track_error_pub = None
         self.heading_error_pub = None
-        self.delta_pub = None
+        self.kappa_pub = None
         if self.pub_errs:
-            self.cross_track_error_pub = self.create_publisher(
-                Float64,
-                self.cross_track_error_topic,
-                10,
-            )
             self.heading_error_pub = self.create_publisher(
                 Float64,
                 self.heading_error_topic,
                 10,
             )
-            self.delta_pub = self.create_publisher(
+            self.kappa_pub_pub = self.create_publisher(
                 Float64,
-                self.delta_topic,
+                self.kappa_topic,
                 10,
             )
             self.get_logger().info(
                 "Error publishers enabled "
-                f"(cte: {self.cross_track_error_topic}, "
                 f"heading: {self.heading_error_topic}, "
-                f"compound: {self.delta_topic})."
+                f"compound: {self.kappa_topic})."
             )
         else:
             self.get_logger().info("Error publishers disabled.")
@@ -325,27 +316,21 @@ class PurePursuitNode(Node):
 
     def publish_error_signals(
         self,
-        cross_track_error: float,
         heading_error: float,
-        delta: float,
+        kappa: float,
     ) -> None:
         if not self.pub_errs:
             return
-
-        if self.cross_track_error_pub is not None:
-            msg = Float64()
-            msg.data = float(cross_track_error)
-            self.cross_track_error_pub.publish(msg)
 
         if self.heading_error_pub is not None:
             msg = Float64()
             msg.data = float(heading_error)
             self.heading_error_pub.publish(msg)
 
-        if self.delta_pub is not None:
+        if self.kappa_pub is not None:
             msg = Float64()
-            msg.data = float(delta)
-            self.delta_pub.publish(msg)
+            msg.data = float(kappa)
+            self.kappa_pub.publish(msg)
 
     def apply_ttc_turn_assist(self, omega: float) -> float:
         omega_base = clamp(omega, -self.max_omega, self.max_omega)
@@ -484,9 +469,8 @@ class PurePursuitNode(Node):
             # v_cmd = self.apply_ttc_brake_speed_reduction(v_cmd, self.max_cmd_velocity)
         v_cmd = clamp(v_cmd, 0.0, self.max_cmd_velocity)
 
-        cross_track_error = by
         kappa = (2.0 * by) / (Ld * Ld + self.eps)
-        self.publish_error_signals(cross_track_error, heading_error, kappa)
+        self.publish_error_signals(heading_error, kappa)
         omega = v_cmd * kappa
 
         if self.use_ackermann_steering_cmd:
@@ -500,7 +484,7 @@ class PurePursuitNode(Node):
             steering_signal = angle_deg_to_signal(steering_angle_deg)
             omega_out = steering_signal
             self.get_logger().info(
-                f"steering_angle={steering_angle_deg:.1f} deg, heading_error={math.degrees(heading_error):.1f} deg, "
+                f"steering_angle={steering_angle_deg:.1f} deg, heading_error={math.degrees(heading_error):.1f} deg, lookahead={Ld:.2f} m"
             )
         else:
             omega = self.apply_ttc_turn_assist(omega)

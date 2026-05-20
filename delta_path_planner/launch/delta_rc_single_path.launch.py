@@ -54,7 +54,7 @@ def generate_launch_description():
 			   "use_start": False,
 			   "manual": False,
 			   "closed_loop": False,
-			   "num_points": 10,
+			   "num_points": 25,
 			   "waypoints_file": "/home/santy-estrada/mrad_ws_2601_delta/src/delta_path_planner/waypoints_json/rc_two_laps.json"}],
 		condition=IfCondition(use_waypoints),
 	)
