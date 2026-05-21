@@ -31,7 +31,6 @@ class ARANode:
     v: float = float('inf')
     parent: Optional[Tuple[int, int]] = None
     
-    # Mantenemos el __lt__ para heapq
     def __lt__(self, other):
         return False
 
@@ -45,7 +44,6 @@ class ARAPlannerNode(Node):
     def __init__(self):
         super().__init__('ara_planner_node')
 
-        # --- ParÃ¡metros de ROS 2 (Reciclados de Dijkstra) ---
         self.declare_parameter('topics.map_topic', '/map')
         self.declare_parameter('topics.goal_topic', '/goal_pose')
         self.declare_parameter('topics.path_topic', '/ara_path')
@@ -54,24 +52,20 @@ class ARAPlannerNode(Node):
 
         self.declare_parameter('frames.base_frame', 'base_link')
         self.declare_parameter('frames.global_frame', 'map')
-        self.declare_parameter('topics.debug_paths', '/ara_debug_paths')  # Nuevo tÃ³pico para rutas de depuraciÃ³n
+        self.declare_parameter('topics.debug_paths', '/ara_debug_paths')
         
-        # Opciones de grilla
         self.declare_parameter('geometry.occupied_threshold', 65)
         self.declare_parameter('geometry.use_8_connected', True)
         self.declare_parameter('geometry.treat_unknown_as_obstacle', True)
 
-        # Parametros de inflacion (misma estrategia que Best First)
         self.occ_thresh = self.declare_parameter('occ_thresh', 100).value
         self.robot_radius_m = self.declare_parameter('robot_radius_m', 0.6).value
         self.safety_margin_m = self.declare_parameter('safety_margin_m', 0.05).value
-        # Se mantiene por compatibilidad con launch existentes.
         self.declare_parameter('geometry.inflate_radius', 0.7)
 
-        # --- ParÃ¡metros NUEVOS para ARA* ---
-        self.declare_parameter('ara_core.epsilon_start', 2.5)       # InflaciÃ³n inicial (Modo rÃ¡pido)
-        self.declare_parameter('ara_core.epsilon_decrease', 0.5)    # CuÃ¡nto baja en cada iteraciÃ³n
-        self.declare_parameter('ara_core.time_limit_sec', 1.5)      # Presupuesto de tiempo total
+        self.declare_parameter('ara_core.epsilon_start', 2.5)
+        self.declare_parameter('ara_core.epsilon_decrease', 0.5)
+        self.declare_parameter('ara_core.time_limit_sec', 1.5)
         self.declare_parameter('ara_core.heuristic_type', 'euclidean')
 
         self.declare_parameter('debug.publish_all_paths', False)
@@ -80,12 +74,10 @@ class ARAPlannerNode(Node):
         self._heuristic_type = self.get_parameter('ara_core.heuristic_type').get_parameter_value().string_value.lower()
         self._use_8_conn = self.get_parameter('geometry.use_8_connected').get_parameter_value().bool_value
 
-        # PRE-CALCULAR LOS MOVIMIENTOS UNA SOLA VEZ
         straight_moves = [(0, 1, 1.0), (0, -1, 1.0), (1, 0, 1.0), (-1, 0, 1.0)]
         diagonal_moves = [(1, 1, 1.4142), (-1, 1, 1.4142), (1, -1, 1.4142), (-1, -1, 1.4142)]
         self._allowed_moves = straight_moves + diagonal_moves if self._use_8_conn else straight_moves
 
-        # --- Subscripciones y Publicadores ---
         map_topic = self.get_parameter('topics.map_topic').get_parameter_value().string_value
         goal_topic = self.get_parameter('topics.goal_topic').get_parameter_value().string_value
         path_topic = self.get_parameter('topics.path_topic').get_parameter_value().string_value
@@ -102,6 +94,9 @@ class ARAPlannerNode(Node):
 
         self.path_pub = self.create_publisher(Path, path_topic, 10)
         self.debug_paths_pub = self.create_publisher(MarkerArray, debug_topic, 10)
+
+        # --- Publisher para visualización de waypoints en RViz ---
+        self.waypoints_markers_pub = self.create_publisher(MarkerArray, '/ara_waypoints_markers', 10)
 
         self.start_flag = (not self.use_waypoints) or (not self.use_start)
         self.pending_paths = []
@@ -121,18 +116,16 @@ class ARAPlannerNode(Node):
         )
         self.map_sub = self.create_subscription(OccupancyGrid, map_topic, self.map_cb, qos_map)
 
-        # --- TF2 (Reciclado) ---
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        # Variables internas
         self._map: Optional[OccupancyGrid] = None
         self._obstacles: Optional[np.ndarray] = None
         self._dist_cells: Optional[np.ndarray] = None
         self.waypoint_pairs = []
         self.waypoints_pending_plan = False
         if self._debug_mode:
-            self.get_logger().info("ARA* Planner Node Iniciado con los siguientes parÃ¡metros:" \
+            self.get_logger().info("ARA* Planner Node Iniciado con los siguientes parámetros:" \
             f"- Epsilon Start: {self.get_parameter('ara_core.epsilon_start').get_parameter_value().double_value}" \
             f"- Epsilon Decrease: {self.get_parameter('ara_core.epsilon_decrease').get_parameter_value().double_value}" \
             f"- Time Limit (sec): {self.get_parameter('ara_core.time_limit_sec').get_parameter_value().double_value}" \
@@ -178,15 +171,13 @@ class ARAPlannerNode(Node):
             )
 
     def map_cb(self, msg: OccupancyGrid):
-        """Recibe el mapa, lo infla como Best First y prepara obstaculos para ARA*."""
         self._map = msg
         W = msg.info.width
         H = msg.info.height
         res = msg.info.resolution
 
-        grid = np.array(msg.data, dtype=np.int16).reshape((H, W))  # row-major: y first
+        grid = np.array(msg.data, dtype=np.int16).reshape((H, W))
 
-        # Inflacion estilo Best First: semilla por occ_thresh y radio en celdas
         inflation_cells = max(
             0,
             int(np.floor((float(self.robot_radius_m) + float(self.safety_margin_m)) / res))
@@ -194,7 +185,7 @@ class ARAPlannerNode(Node):
         inflated_mask = self.make_inflation_mask(grid, inflation_cells, int(self.occ_thresh))
 
         inflated_grid = grid.copy()
-        inflated_grid[inflated_mask] = 80  # Hard inflation
+        inflated_grid[inflated_mask] = 80
         self._grid = inflated_grid
 
         occ_th = self.get_parameter('geometry.occupied_threshold').get_parameter_value().integer_value
@@ -214,18 +205,12 @@ class ARAPlannerNode(Node):
             self.plan_waypoint_paths()
 
     def make_inflation_mask(self, grid: np.ndarray, inflation_cells: int, occ_thresh: int) -> np.ndarray:
-        """Devuelve mascara booleana (H,W) con inflacion tipo Best First."""
         occ = (grid >= occ_thresh)
         dist_cells = self.compute_distance_to_obstacles(occ)
         self._dist_cells = dist_cells
         return dist_cells <= inflation_cells
 
     def compute_distance_to_obstacles(self, obstacles: np.ndarray) -> np.ndarray:
-        """Brushfire / multi-source BFS distance transform (4-connected).
-
-        Returns dist[y,x] in *cells* to the nearest obstacle cell.
-        Obstacle cells have distance 0.
-        """
         H, W = obstacles.shape
         INF = np.iinfo(np.int32).max
         dist = np.full((H, W), INF, dtype=np.int32)
@@ -236,7 +221,6 @@ class ARAPlannerNode(Node):
             dist[y, x] = 0
             q.append((x, y))
 
-        # If there are no obstacles, dist stays INF everywhere.
         if not q:
             return dist
 
@@ -253,19 +237,16 @@ class ARAPlannerNode(Node):
         return dist
 
     def goal_cb(self, msg: PoseStamped):
-        """Se activa al recibir una meta en RViz. Aqui arranca el ARA*."""
         if self._map is None or self._obstacles is None:
-            self.get_logger().warn("No hay mapa todava.")
+            self.get_logger().warn("No hay mapa todavía.")
             return
 
-        # 1. Obtener la posiciÃ³n actual del robot (Start)
         try:
             transform = self.tf_buffer.lookup_transform(
                 self.get_parameter('frames.global_frame').value,
                 self.get_parameter('frames.base_frame').value,
                 rclpy.time.Time()
             )
-            # Crear PoseStamped temporal para el inicio
             start_pose = PoseStamped()
             start_pose.header.frame_id = self.get_parameter('frames.global_frame').value
             start_pose.pose.position.x = transform.transform.translation.x
@@ -275,14 +256,12 @@ class ARAPlannerNode(Node):
             self.get_logger().error(f"Error obteniendo TF: {e}")
             return
 
-        # 2. Llamar al motor matemÃ¡tico del ARA*
         path_msg = self.plan_ara_star(start_pose, msg)
 
-        # 3. Publicar si se encontrÃ³ una ruta
         if path_msg is not None:
-            self._publish_or_queue_path(path_msg, "Â¡Ruta ARA* publicada!")
+            self._publish_or_queue_path(path_msg, "¡Ruta ARA* publicada!")
         else:
-            self.get_logger().error("ARA* fallÃ³ al encontrar una ruta.")
+            self.get_logger().error("ARA* falló al encontrar una ruta.")
 
     def waypoints_callback(self, msg: Path):
         """Handle waypoint pairs from waypoints_topic.
@@ -298,7 +277,99 @@ class ARAPlannerNode(Node):
 
         self.get_logger().info(f'Received {len(self.waypoint_pairs)} waypoint pairs')
         self.waypoints_pending_plan = True
+
+        # --- Publicar marcadores de visualización de waypoints ---
+        self._publish_waypoint_markers(msg)
+
         self.plan_waypoint_paths()
+
+    # =================================================================
+    # VISUALIZACIÓN DE WAYPOINTS
+    # =================================================================
+    def _publish_waypoint_markers(self, msg: Path):
+        """
+        Publica un MarkerArray en /ara_waypoints_markers mostrando
+        únicamente una vuelta única de waypoints (sin repetidos).
+
+          - Una esfera por waypoint único.
+          - Un texto encima con índice y coordenadas.
+        """
+        frame_id = self.get_parameter('frames.global_frame').value
+        stamp = self.get_clock().now().to_msg()
+
+        marker_array = MarkerArray()
+
+        # Borrar marcadores anteriores
+        delete_all = Marker()
+        delete_all.action = Marker.DELETEALL
+        delete_all.ns = 'ara_waypoints'
+        marker_array.markers.append(delete_all)
+
+        # ============================================================
+        # FILTRAR WAYPOINTS REPETIDOS
+        # ============================================================
+        unique_poses = []
+        seen = set()
+
+        for pose_stamped in msg.poses:
+            x = round(pose_stamped.pose.position.x, 3)
+            y = round(pose_stamped.pose.position.y, 3)
+
+            key = (x, y)
+
+            if key not in seen:
+                seen.add(key)
+                unique_poses.append(pose_stamped)
+
+        # ============================================================
+        # PUBLICAR SOLO LOS WAYPOINTS ÚNICOS
+        # ============================================================
+        for idx, pose_stamped in enumerate(unique_poses):
+            x = pose_stamped.pose.position.x
+            y = pose_stamped.pose.position.y
+
+            # ---- Esfera ----
+            sphere = Marker()
+            sphere.header.frame_id = frame_id
+            sphere.header.stamp = stamp
+            sphere.ns = 'ara_waypoints'
+            sphere.id = idx * 2
+            sphere.type = Marker.SPHERE
+            sphere.action = Marker.ADD
+            sphere.pose.position.x = x
+            sphere.pose.position.y = y
+            sphere.pose.position.z = 0.0
+            sphere.pose.orientation.w = 1.0
+            sphere.scale.x = 0.15
+            sphere.scale.y = 0.15
+            sphere.scale.z = 0.15
+            sphere.color = ColorRGBA(r=0.0, g=0.5, b=1.0, a=1.0)
+
+            marker_array.markers.append(sphere)
+
+            # ---- Texto ----
+            label = Marker()
+            label.header.frame_id = frame_id
+            label.header.stamp = stamp
+            label.ns = 'ara_waypoints'
+            label.id = idx * 2 + 1
+            label.type = Marker.TEXT_VIEW_FACING
+            label.action = Marker.ADD
+            label.pose.position.x = x
+            label.pose.position.y = y
+            label.pose.position.z = 0.30
+            label.pose.orientation.w = 1.0
+            label.scale.z = 0.18
+            label.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)
+            label.text = f'#{idx}  ({x:.2f}, {y:.2f})'
+
+            marker_array.markers.append(label)
+
+        self.waypoints_markers_pub.publish(marker_array)
+
+        self.get_logger().info(
+            f'Published {len(unique_poses)} unique waypoint markers on /ara_waypoints_markers'
+        )
 
     def plan_waypoint_paths(self):
         """Plan paths for all waypoint pairs and publish as single combined path."""
@@ -334,7 +405,6 @@ class ARAPlannerNode(Node):
     # 4. FUNCIONES AUXILIARES 
     # =================================================================
     def world_to_map(self, x, y, x0, y0, res, W, H) -> Optional[Tuple[int, int]]:
-        """World (meters) -> grid indices (ix, iy)."""
         ix = int(math.floor((x - x0) / res))
         iy = int(math.floor((y - y0) / res))
         if 0 <= ix < W and 0 <= iy < H:
@@ -342,7 +412,6 @@ class ARAPlannerNode(Node):
         return None
 
     def map_to_world(self, ix, iy, x0, y0, res) -> Tuple[float, float]:
-        """Grid indices -> world (meters), at cell center."""
         x = x0 + (ix + 0.5) * res
         y = y0 + (iy + 0.5) * res
         return x, y
@@ -350,14 +419,12 @@ class ARAPlannerNode(Node):
     def get_neighbors(self, ix: int, iy: int, W: int, H: int) -> List[Tuple[int, int, float]]:
         neighbors = []
         
-        # Iteramos sobre la lista en memoria, sin crear nuevas listas ni llamar parÃ¡metros ROS2
         for dx, dy, cost in self._allowed_moves:
             nx = ix + dx
             ny = iy + dy
 
             if 0 <= nx < W and 0 <= ny < H:
                 if not self._obstacles[ny, nx]:
-                    # Chequeo de cruce de esquina (opcional)
                     if abs(dx) == 1 and abs(dy) == 1:
                         if self._obstacles[iy, nx] or self._obstacles[ny, ix]:
                             continue
@@ -366,136 +433,80 @@ class ARAPlannerNode(Node):
         return neighbors
 
     # =================================================================
-    # 5. EL NÃšCLEO MATEMÃTICO ARA* 
+    # 5. EL NÚCLEO MATEMÁTICO ARA* 
     # =================================================================
     def calculate_heuristic(self, curr_idx: Tuple[int, int], goal_idx: Tuple[int, int]) -> float:
-        """
-        Calcula la estimaciÃ³n h(s) desde el nodo actual a la meta.
-        Puedes usar distancia Euclidiana o Manhattan.
-        """
-        # Distancia absoluta en X y en Y
         dx = abs(curr_idx[0] - goal_idx[0])
         dy = abs(curr_idx[1] - goal_idx[1])
 
         if self._heuristic_type == 'manhattan':
-            # Distancia Manhattan: Solo permite movimientos en cruz (L)
-            # h(s) = |dx| + |dy|
             return float(dx + dy)
-            
         else:
-            # Distancia Euclidiana (Por defecto): LÃ­nea recta
-            # Usamos math.hypot que es mÃ¡s rÃ¡pido y numÃ©ricamente mÃ¡s estable que sqrt(dx**2 + dy**2)
             return math.hypot(dx, dy)
 
     def f_value(self, g: float, h: float, epsilon: float) -> float:
-        """Retorna el costo total estimado: f(s) = g(s) + epsilon * h(s)"""
         return g + (epsilon * h)
 
     def improve_path(self, goal_idx: Tuple[int, int], epsilon: float, 
                      state_space: Dict[Tuple[int, int], 'ARANode'], 
                      OPEN: list, CLOSED: set, INCONS: set):
-        """
-        El nÃºcleo de ARA*. Expande nodos hasta que la meta estÃ© garantizada
-        para el factor de inflaciÃ³n epsilon actual.
-        """
-        # 1. Obtener dimensiones del mapa para los vecinos
         W = self._map.info.width
         H = self._map.info.height
 
-        # Asegurarnos de que la meta exista en el state_space para poder evaluar su g(s)
         if goal_idx not in state_space:
             state_space[goal_idx] = ARANode(goal_idx[0], goal_idx[1])
 
-        # =================================================================
-        # BUCLE PRINCIPAL (LÃ­nea 13 del paper)
-        # CondiciÃ³n: Mientras OPEN no estÃ© vacÃ­o Y g(meta) > mÃ­nimo f(s) en OPEN
-        # Nota: f(meta) es igual a g(meta) porque la heurÃ­stica h(meta) es 0.
-        # OPEN[0][0] nos da el f(s) mÃ¡s pequeÃ±o actualmente en el min-heap.
-        # =================================================================
         while OPEN and state_space[goal_idx].g > OPEN[0][0]:
             
-            # LÃ­nea 14: Remover el nodo con menor f(s)
             current_f, current_idx = heapq.heappop(OPEN)
 
-            # --- LAZY DELETION ---
-            # Si este nodo ya fue expandido en esta iteraciÃ³n, es un "fantasma" 
-            # de una actualizaciÃ³n anterior. Lo ignoramos.
             if current_idx in CLOSED:
                 continue
 
             current_node = state_space[current_idx]
-
-            # LÃ­nea 15: v(s) = g(s) (Hacer el nodo "Consistente")
             current_node.v = current_node.g
-            
-            # LÃ­nea 16: Meterlo a CLOSED
             CLOSED.add(current_idx)
 
-            # LÃ­nea 17: Para cada vecino s' del nodo s
             neighbors = self.get_neighbors(current_idx[0], current_idx[1], W, H)
             
             for nx, ny, transition_cost in neighbors:
                 neighbor_idx = (nx, ny)
                 
-                # InicializaciÃ³n "On-the-fly" (Crear el nodo si no lo habÃ­amos visto nunca)
                 if neighbor_idx not in state_space:
                     state_space[neighbor_idx] = ARANode(nx, ny)
                 
                 neighbor_node = state_space[neighbor_idx]
-
-                # LÃ­nea 18: Â¿Encontramos un atajo? si g(s') > g(s) + c(s, s')
                 new_g = current_node.g + transition_cost
                 
                 if neighbor_node.g > new_g:
-                    
-                    # LÃ­nea 19: Actualizamos el peso y guardamos el rastro (Parent)
                     neighbor_node.g = new_g
                     neighbor_node.parent = current_idx 
 
-                    # LÃ­nea 20: Â¿s' NO estÃ¡ en CLOSED?
                     if neighbor_idx not in CLOSED:
-                        # LÃ­nea 21: Insertar (o actualizar "lazy") s' en OPEN
                         h_val = self.calculate_heuristic(neighbor_idx, goal_idx)
                         new_f = self.f_value(new_g, h_val, epsilon)
                         heapq.heappush(OPEN, (new_f, neighbor_idx))
-                    
-                    # LÃ­nea 22: else (s' SI estÃ¡ en CLOSED, o sea, ya lo habÃ­amos procesado)
                     else:
-                        # LÃ­nea 23: Insertar s' en INCONS
                         INCONS.add(neighbor_idx)
 
     def reconstruct_path(self, start_idx, goal_idx, state_space, path_msg_header, x0, y0, res) -> Path:
-        """
-        Navega hacia atrÃ¡s usando state_space[nodo].parent para 
-        construir el mensaje nav_msgs/Path a publicar en RViz.
-        """
-        # Crear el mensaje de ROS 2 vacÃ­o
         path_msg = Path()
         path_msg.header = path_msg_header
 
-        # ==========================================================
-        # 1. Backtracking: Recuperar los Ã­ndices de la meta al inicio
-        # ==========================================================
         current_idx = goal_idx
         path_cells = []
 
-        # Retroceder por los padres hasta llegar a None o al inicio
         while current_idx is not None:
             path_cells.append(current_idx)
             if current_idx == start_idx:
                 break
             current_idx = state_space[current_idx].parent
 
-        # Como la lista se construyÃ³ desde la meta, la invertimos (Inicio -> Meta)
         path_cells.reverse()
 
-        # ==========================================================
-        # 2. TraducciÃ³n: Matriz -> Mundo Real (Metros)
-        # ==========================================================
-        last_yaw = 0.0  # Ãngulo por defecto
+        last_yaw = 0.0
         
         for i, (ix, iy) in enumerate(path_cells):
-            # Obtener el centro fÃ­sico de la celda (usando la funciÃ³n que vimos antes)
             x, y = self.map_to_world(ix, iy, x0, y0, res)
             
             pose = PoseStamped()
@@ -504,37 +515,22 @@ class ARAPlannerNode(Node):
             pose.pose.position.y = y
             pose.pose.position.z = 0.0
 
-            # ==========================================================
-            # 3. OrientaciÃ³n CinemÃ¡tica (CÃ¡lculo del Yaw)
-            # ==========================================================
-            # Miramos el siguiente punto de la ruta para saber hacia dÃ³nde mirar
             if i + 1 < len(path_cells):
                 next_ix, next_iy = path_cells[i + 1]
                 nx_world, ny_world = self.map_to_world(next_ix, next_iy, x0, y0, res)
-                
-                # math.atan2 calcula el Ã¡ngulo del vector entre el punto actual y el siguiente
                 last_yaw = math.atan2(ny_world - y, nx_world - x)
             
-            # Convertimos el Ã¡ngulo Yaw de Euler a CuaterniÃ³n (Requisito de ROS 2)
             pose.pose.orientation = yaw_to_quaternion(last_yaw)
-            
-            # AÃ±adir la pose al arreglo final del mensaje Path
             path_msg.poses.append(pose)
 
         return path_msg
 
     def plan_ara_star(self, start: PoseStamped, goal: PoseStamped) -> Optional[Path]:
-        """
-        El procedimiento Main() del paper de Likhachev.
-        Controla el presupuesto de tiempo y el ciclo de decremento de epsilon.
-        """
-        # 1. Extraer metadata del mapa
         info = self._map.info
         res = info.resolution
         x0, y0 = info.origin.position.x, info.origin.position.y
         W, H = info.width, info.height
 
-        # 2. Convertir start y goal a Ã­ndices
         s_idx = self.world_to_map(start.pose.position.x, start.pose.position.y, x0, y0, res, W, H)
         g_idx = self.world_to_map(goal.pose.position.x, goal.pose.position.y, x0, y0, res, W, H)
 
@@ -542,31 +538,23 @@ class ARAPlannerNode(Node):
             self.get_logger().error("Start o Goal fuera del mapa.")
             return None
 
-        # 3. Inicializar parÃ¡metros del ARA*
         epsilon = self.get_parameter('ara_core.epsilon_start').value
         eps_dec = self.get_parameter('ara_core.epsilon_decrease').value
         time_limit = self.get_parameter('ara_core.time_limit_sec').value
 
-        # 4. Inicializar estructuras de datos (Las tres listas y el State Space)
-        OPEN = []       # Cola de prioridad (heapq)
-        CLOSED = set()  # Set para bÃºsqueda rÃ¡pida
-        INCONS = set()  # Nodos a reparar
-        
-        # Diccionario para guardar todos los objetos ARANode instanciados
-        # Llave: Tupla (x,y), Valor: Objeto ARANode
+        OPEN = []
+        CLOSED = set()
+        INCONS = set()
         state_space: Dict[Tuple[int, int], ARANode] = {} 
 
-        # Crear nodo inicial
         start_node = ARANode(s_idx[0], s_idx[1])
         start_node.g = 0.0
         state_space[s_idx] = start_node
         
-        # Calcular h(s_start) e insertarlo en OPEN
         h_start = self.calculate_heuristic(s_idx, g_idx)
         f_start = self.f_value(start_node.g, h_start, epsilon)
         heapq.heappush(OPEN, (f_start, s_idx))
 
-        # 5. El Bucle Anytime (Controlado por tiempo y epsilon)
         start_time = time.time()
         best_path_found = False
 
@@ -576,15 +564,12 @@ class ARAPlannerNode(Node):
         while epsilon >= 1.0:
             self.get_logger().info(f"Buscando ruta con epsilon={epsilon:.2f}...")
             
-            # Llamar al motor de expansiÃ³n
             self.improve_path(g_idx, epsilon, state_space, OPEN, CLOSED, INCONS)
 
-            # Verificar si ImprovePath conectÃ³ el inicio con la meta
             if g_idx in state_space and state_space[g_idx].g < float('inf'):
                 best_path_found = True
-                self.get_logger().info(f"Â¡Ruta subÃ³ptima encontrada para eps={epsilon:.2f}!")
+                self.get_logger().info(f"¡Ruta subóptima encontrada para eps={epsilon:.2f}!")
                 if self._debug_mode:
-                    # Hacemos un mini-backtracking solo de celdas
                     curr = g_idx
                     cells = []
                     while curr is not None:
@@ -592,7 +577,6 @@ class ARAPlannerNode(Node):
                         if curr == s_idx: break
                         curr = state_space[curr].parent
                     
-                    # Crear el marcador visual y guardarlo
                     marker = self.create_path_marker(
                         cells, epsilon, iteration_count, 
                         start.header.frame_id, x0, y0, res
@@ -600,57 +584,40 @@ class ARAPlannerNode(Node):
                     debug_markers.markers.append(marker)
                     iteration_count += 1
             
-            # Revisar si se nos acabÃ³ el tiempo
             if (time.time() - start_time) > time_limit:
-                self.get_logger().warn("Tiempo de cÃ¡lculo agotado.")
+                self.get_logger().warn("Tiempo de cálculo agotado.")
                 break
             
-            # --- Fase de ReparaciÃ³n ---
             if epsilon == 1.0:
-                break # Ya encontramos la Ã³ptima, salir del bucle
+                break
                 
-            # Disminuir epsilon
             epsilon -= eps_dec
             if epsilon < 1.0:
                 epsilon = 1.0
 
-            # VACIAR INCONS DENTRO DE OPEN Y RECONSTRUIR EL HEAP
-            # Necesitamos recalcular f(s) = g(s) + epsilon * h(s) para TODOS los nodos latentes
-            
             new_open_list = []
             
-            # 1. Recalcular nodos que ya estaban en OPEN
             for _, idx in OPEN:
-                # Evitar nodos marcados como lazy deletion
                 if idx not in CLOSED:
                     h_val = self.calculate_heuristic(idx, g_idx)
                     new_f = self.f_value(state_space[idx].g, h_val, epsilon)
                     new_open_list.append((new_f, idx))
             
-            # 2. Recalcular y agregar nodos de la lista INCONS
             for idx in INCONS:
                 h_val = self.calculate_heuristic(idx, g_idx)
                 new_f = self.f_value(state_space[idx].g, h_val, epsilon)
                 new_open_list.append((new_f, idx))
 
-            # 3. Restaurar las propiedades de la cola de prioridad O(N)
             heapq.heapify(new_open_list)
             OPEN = new_open_list
             
-            # 4. Limpiar para la siguiente iteraciÃ³n
             INCONS.clear()
             CLOSED.clear()
-            # (Opcional) Reconstruir OPEN completamente para actualizar 
-            # las prioridades F(s) de los nodos que ya estaban adentro.
-
-        # 6. Reconstruir la ruta y retornar
 
         if self._debug_mode and debug_markers.markers:
-            # AÃ±adimos un marcador especial para borrar lÃ­neas de metas anteriores
             delete_marker = Marker()
             delete_marker.action = Marker.DELETEALL
             debug_markers.markers.insert(0, delete_marker)
-            
             self.debug_paths_pub.publish(debug_markers)
 
         if best_path_found:
@@ -658,11 +625,9 @@ class ARAPlannerNode(Node):
         else:
             return None
 
-
     # =================================================================
-    # 6. FUNCIONES DE DEPURACIÃ“N (Opcional, para visualizar rutas subÃ³ptimas en RViz)
+    # 6. FUNCIONES DE DEPURACIÓN
     # =================================================================
-
     def create_path_marker(self, path_cells: List[Tuple[int, int]], epsilon: float, 
                            marker_id: int, frame_id: str, x0: float, y0: float, res: float) -> Marker:
         marker = Marker()
@@ -672,26 +637,21 @@ class ARAPlannerNode(Node):
         marker.id = marker_id
         marker.type = Marker.LINE_STRIP
         marker.action = Marker.ADD
-        
-        # Grosor de la lÃ­nea
         marker.scale.x = 0.01 
         
-        # LÃ³gica de Color (Rojo = subÃ³ptimo, Verde = Ã³ptimo)
         eps_start = self.get_parameter('ara_core.epsilon_start').value
-        ratio = (epsilon - 1.0) / max((eps_start - 1.0), 0.01) # De 1.0 (Rojo) a 0.0 (Verde)
+        ratio = (epsilon - 1.0) / max((eps_start - 1.0), 0.01)
         
         marker.color = ColorRGBA()
-        marker.color.r = max(0.0, min(1.0, float(ratio)))        # MÃ¡s rojo si epsilon es alto
-        marker.color.g = max(0.0, min(1.0, float(1.0 - ratio)))  # MÃ¡s verde si epsilon se acerca a 1
+        marker.color.r = max(0.0, min(1.0, float(ratio)))
+        marker.color.g = max(0.0, min(1.0, float(1.0 - ratio)))
         marker.color.b = 0.0
-        marker.color.a = 0.8  # Ligeramente transparente
+        marker.color.a = 0.8
 
-        # Convertir celdas a puntos 3D
         for ix, iy in path_cells:
             x, y = self.map_to_world(ix, iy, x0, y0, res)
             p = Point()
             p.x, p.y = x, y
-
             p.z = marker_id * 0.02
             marker.points.append(p)
             
