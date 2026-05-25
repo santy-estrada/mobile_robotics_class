@@ -23,20 +23,20 @@ def generate_launch_description():
 		"use_ttc": True,
 		"control_rate_hz": 20.0, #10 original
 		"goal_tolerance": 1.5,
-		"max_cmd_velocity": 2.75,
+		"max_cmd_velocity": 2.77,
 		"speed_adaptive_min": 2.8,
 		"speed_heading_coupling": 0.5, # 0.5 original
 		"cmd_smoothing_factor": 0.2, # 0.3 original
 		"error_threshold": 15.0, # 10.0 original
 		"use_speed_adaptive": True,
-		"speed_nominal": 2.75,
+		"speed_nominal": 2.77,
 		"pub_errs": True,
 		"pub_debug": False,
-		"lookahead_L0": 2.55, # 0.9 original
-		"lookahead_kv": 0.0, # 0.7 original
+		"lookahead_L0": 1.3, # 0.9 original
+		"lookahead_kv": 0.7, # 0.7 original
 		"lookahead_min": 1.0, # 1.0 original
-		"lookahead_max": 2.55	, # 2.0 original
-		"wheelbase": 0.3,
+		"lookahead_max": 2.8	, # 2.0 original
+		"wheelbase": 0.31,
 	}
 
 	ttc_break_params = {
