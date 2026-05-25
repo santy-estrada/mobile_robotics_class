@@ -6,6 +6,7 @@ from rclpy.node import Node
 
 from sensor_msgs.msg import Imu, MagneticField
 from geometry_msgs.msg import Pose
+from std_msgs.msg import Float64
 
 from delta_ekf.madgwick_filter import MadgwickAHRS
 
@@ -15,6 +16,7 @@ import tf2_ros
 SAMPLE_PERIOD = 1.0 / 10.0
 BETA = 0.0001
 FRAME_ID = "base_link"
+ENCODER_STOP_THRESHOLD = 0.1
 
 
 def quat_to_rot(qx, qy, qz, qw):
@@ -32,11 +34,23 @@ class MadgwickNode(Node):
 
         self._ahrs = MadgwickAHRS(sample_period=SAMPLE_PERIOD, beta=BETA)
         self._latest_mag = np.array([1.0, 0.0, 0.0])
+        self._latest_encoder_vel = 0.0
+
+        self.declare_parameter("use_encoder_velocity_gate", True)
+        self._use_encoder_velocity_gate = self.get_parameter(
+            "use_encoder_velocity_gate"
+        ).value
 
         self._pub = self.create_publisher(Pose, "/robot1/orientation", 10)
 
         self.create_subscription(MagneticField, "/imu/mag", self._mag_callback, 10)
         self.create_subscription(Imu, "/imu/data_raw", self._imu_callback, 10)
+        self.create_subscription(
+            Float64,
+            "/encoder/vel",
+            self._encoder_vel_callback,
+            10,
+        )
 
         # TF
         self._tf_buffer = tf2_ros.Buffer()
@@ -51,6 +65,9 @@ class MadgwickNode(Node):
             msg.magnetic_field.y,
             msg.magnetic_field.z,
         ])
+
+    def _encoder_vel_callback(self, msg):
+        self._latest_encoder_vel = msg.data
 
     def _get_rotation(self):
         """Obtiene R (imu_link → base_link)"""
@@ -67,7 +84,7 @@ class MadgwickNode(Node):
             q = tf_msg.transform.rotation
             self._R = quat_to_rot(q.x, q.y, q.z, q.w)
 
-            self.get_logger().info(f"R cargada:\n{np.round(self._R, 3)}")
+            #self.get_logger().info(f"R cargada:\n{np.round(self._R, 3)}")
 
         except Exception:
             return None
@@ -92,6 +109,13 @@ class MadgwickNode(Node):
         R = self._get_rotation()
         if R is None:
             return
+
+        if (
+            self._use_encoder_velocity_gate
+            and abs(self._latest_encoder_vel) < ENCODER_STOP_THRESHOLD
+        ):
+            return
+
         # corrección giroscopio y acelerometro
         gyro = R @ raw_gyro
         accel = R @ raw_accel   
@@ -106,7 +130,7 @@ class MadgwickNode(Node):
         pose_msg.orientation.y = float(q[2])
         pose_msg.orientation.z = float(q[3])
 
-        self.get_logger().info(f"accel corregido: {np.round(accel,2)}")
+        #self.get_logger().info(f"accel corregido: {np.round(accel,2)}")
 
         self._pub.publish(pose_msg)
 

@@ -33,7 +33,7 @@ def signal_to_angle_deg(signal: float) -> float:
 
 def angle_deg_to_signal(target_angle_deg: float) -> float:
     # Keep requested limit at +/-33 deg and always enforce signal hardware limits.
-    target_angle_deg = clamp(target_angle_deg, -30.0, 30.0)
+    target_angle_deg = clamp(target_angle_deg, -27.0, 27.0)
     if target_angle_deg == 0.0:
         return 0.0
 
@@ -62,7 +62,7 @@ class PurePursuitNode(Node):
         self.declare_parameter("base_frame", "base_link")
 
         # Control
-        self.declare_parameter("control_rate_hz", 25.0)
+        self.declare_parameter("control_rate_hz", 20.0)
         self.declare_parameter("max_cmd_velocity", 3.0)           # m/s - hard cap on output velocity command
         self.declare_parameter("use_speed_adaptive", False)       # Use heading-error-based speed adjustment
         self.declare_parameter("speed_nominal", 2.2)             # m/s - nominal speed when adaptive is disabled
@@ -88,7 +88,7 @@ class PurePursuitNode(Node):
         self.declare_parameter("kappa_topic", "/kappa")
         self.declare_parameter("use_ackermann_steering_cmd", True)
         self.declare_parameter("wheelbase", 0.25) 
-        self.declare_parameter("steering_angle_limit_deg", 30.0)
+        self.declare_parameter("steering_angle_limit_deg", 27.0)
 
         # Lookahead: Ld = clamp(L0 + k*v, Lmin, Lmax)
         self.declare_parameter("lookahead_L0", 0.6)         # m
@@ -167,7 +167,7 @@ class PurePursuitNode(Node):
                 self.heading_error_topic,
                 10,
             )
-            self.kappa_pub_pub = self.create_publisher(
+            self.kappa_pub = self.create_publisher(
                 Float64,
                 self.kappa_topic,
                 10,
