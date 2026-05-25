@@ -4,21 +4,39 @@ import math
 import re
 import rclpy
 from rclpy.node import Node
+from rclpy.duration import Duration
+from rclpy.time import Time
 from std_msgs.msg import Bool, Float64
-from geometry_msgs.msg import TwistStamped, Pose 
+from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Path
-from rosgraph_msgs.msg import Clock
+import tf2_ros
+from tf2_ros import TransformException
+
+# Identified steering regression model coefficients (signal <-> angle in degrees).
+STEERING_MODEL_A = 10.422533
+STEERING_MODEL_B = 1.026880
+
+
+def clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
+
+
+def signal_to_angle_deg(signal: float) -> float:
+    signal = clamp(signal, -3.0, 3.0)
+    return math.copysign(STEERING_MODEL_A * abs(signal) ** STEERING_MODEL_B, signal)
+
 
 
 FIELDNAMES = [
     "row_type",      # sample | planned_path
     "timestamp_s",
     "elapsed_s",
-    "v_real",        # velocidad lineal real  (/diffdrive_controller/cmd_vel)
-    "w_real",        # velocidad angular real
+    "v_real",        # velocidad lineal real medida (/encoder/vel)
+    "w_real",        # velocidad angular real estimada (map->base_link)
+    "steering_angle_rad",  # angulo de direccion comando convertido a radianes
     "brake",         # cantidad de flancos de subida de freno desde la ultima fila
-    "x",             # posición X del robot (Real)
-    "y",             # posición Y del robot (Real)
+    "x",             # posicion X del robot en frame map
+    "y",             # posicion Y del robot en frame map
     "distance_m",    # distancia acumulada en X-Y hasta esta muestra
     "heading_error_rad", # error de orientación respecto al camino ideal (nuevo campo)
     "kappa", 
@@ -33,11 +51,16 @@ class MapMetricsLogger(Node):
         super().__init__('map_metrics_logger')
 
         self.declare_parameter('path_topic', '/planned_path')
+        self.declare_parameter('map_frame', 'map')
+        self.declare_parameter('base_frame', 'base_link')
+        self.declare_parameter('tf_timeout_sec', 0.2)
         self.path_topic = str(self.get_parameter('path_topic').value)
+        self.map_frame = str(self.get_parameter('map_frame').value)
+        self.base_frame = str(self.get_parameter('base_frame').value)
+        self.tf_timeout_sec = float(self.get_parameter('tf_timeout_sec').value)
 
         # ─── Estado ──────────────────────────────────────────────────────
         self.start_time = None
-        self.last_clock = None
 
         self.total_distance = 0.0
         self.brake_active = False
@@ -48,14 +71,19 @@ class MapMetricsLogger(Node):
         self.latest_y = None
         self.prev_row_x = None
         self.prev_row_y = None
-        self.v_ref = 0.0
-        self.w_ref = 0.0
+        self.latest_v_real = 0.0
+        self.latest_w_real = 0.0
+        self.prev_yaw = None
+        self.prev_yaw_time = None
 
         self.heading_error = 0.0
         self.kappa = 0.0
 
         self.path_saved = False
         self.pending_path_points = []
+
+        self.tf_buffer = tf2_ros.Buffer(cache_time=Duration(seconds=5.0))
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self._closed = False
 
@@ -85,17 +113,17 @@ class MapMetricsLogger(Node):
         # ─── Subscripciones ──────────────────────────────────────────────
         self.create_subscription(Bool,         '/start',                         self.start_cb, 10)
         self.create_subscription(Bool,         '/brake_active',                  self.brake_cb, 10)
-        self.create_subscription(TwistStamped, '/cmd_vel_ttc_gap',               self.ref_cb,   10)
-        self.create_subscription(Float64,      '/encoder/vel',                   self.cmd_cb,   10)
+        self.create_subscription(TwistStamped, '/cmd_vel_nav',                   self.cmd_cb, 10)
+        self.create_subscription(Float64,      '/encoder/vel',                   self.encoder_vel_cb, 10)
         self.create_subscription(Float64,      '/heading_error',             self.heading_error_cb, 10)  # Error de orientación
         self.create_subscription(Float64,      '/kappa', self.kappa_cb, 10)  # Curvatura
         self.create_subscription(Path,         self.path_topic,               self.path_cb, 10)
-
-        self.create_subscription(Pose,         '/ground_truth_pose',             self.pose_cb,  10)
-        self.create_subscription(Clock,        '/clock',                         self.clock_cb, 10)
         self.create_subscription(Bool,         '/stop',                          self.stop_cb,  10)
 
         self.get_logger().info(f"Escuchando path ideal en: {self.path_topic}")
+        self.get_logger().info(
+            f"Estimando pose en mapa con TF {self.map_frame}->{self.base_frame}."
+        )
 
     # ─── Callbacks ───────────────────────────────────────────────────────
 
@@ -107,6 +135,7 @@ class MapMetricsLogger(Node):
         self.kappa = msg.data
 
     def stop_cb(self, msg: Bool):
+        #ros2 topic pub --once /stop std_msgs/msg/Bool "{data: false}"
         if msg.data:
             self.get_logger().info("[map_metrics_logger] Señal /stop recibida — cerrando.")
             self.close()
@@ -115,63 +144,57 @@ class MapMetricsLogger(Node):
     def start_cb(self, msg: Bool):
         if msg.data and not self.start_flag:
             self.start_flag = True
-            # Arranca el cronometro exactamente con /start (o en el primer /clock posterior si aun no hay reloj).
-            self.start_time = self.last_clock
+            self.start_time = None
 
             # Reinicia acumuladores para que cada corrida arranque limpia.
             self.total_distance = 0.0
             self.pending_brake_events = 0
             self.prev_row_x = None
             self.prev_row_y = None
+            self.prev_yaw = None
+            self.prev_yaw_time = None
+            self.latest_w_real = 0.0
 
             # Si ya hay path recibido, lo guarda una sola vez al iniciar la corrida.
             self._write_pending_path_once()
 
-            if self.start_time is None:
-                self.get_logger().info("Señal /start recibida; esperando /clock para fijar tiempo inicial.")
-            else:
-                self.get_logger().info(f"Señal /start recibida → comenzando medición en t={self.start_time:.6f}s.")
+            self.get_logger().info("Señal /start recibida; esperando /cmd_vel_nav para fijar tiempo inicial.")
             
     def brake_cb(self, msg: Bool):
         if msg.data and not self.brake_active:
             self.pending_brake_events += 1
         self.brake_active = msg.data
         
-    def ref_cb(self, msg: TwistStamped):
-        self.v_ref = msg.twist.linear.x       # ← TwistStamped necesita .twist.
-        self.w_ref = msg.twist.angular.z
+    def encoder_vel_cb(self, msg: Float64):
+        self.latest_v_real = float(msg.data)
 
     def cmd_cb(self, msg: TwistStamped):
         """Una muestra → una fila en el CSV."""
         if not self.start_flag:
             return
-        if self.start_time is None:
-            return  # aun no hay reloj sincronizado luego de /start
 
         cmd_stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        # Si el publisher no estampa, cae al ultimo /clock disponible.
-        sample_time = self.last_clock if cmd_stamp == 0.0 and self.last_clock is not None else cmd_stamp
-        if sample_time is None:
-            return
+        sample_time = cmd_stamp if cmd_stamp > 0.0 else self.get_clock().now().nanoseconds * 1e-9
+
+        if self.start_time is None:
+            self.start_time = sample_time
+            self.get_logger().info(f"Comenzando medicion en t={self.start_time:.6f}s (primer /cmd_vel_nav).")
 
         elapsed = sample_time - self.start_time
         if elapsed < 0.0:
             elapsed = 0.0
 
-        v = msg.twist.linear.x
-        w = msg.twist.angular.z
+        steering_signal = float(msg.twist.angular.z)
+        steering_angle_rad = math.radians(signal_to_angle_deg(steering_signal))
 
-        if self.latest_x is None or self.latest_y is None:
-            x = 0.0
-            y = 0.0
+        x, y = self._update_map_pose_and_omega(sample_time)
+        v = self.latest_v_real
+        w = self.latest_w_real
+
+        if self.prev_row_x is None or self.prev_row_y is None:
             kappa_distance = 0.0
         else:
-            x = self.latest_x
-            y = self.latest_y
-            if self.prev_row_x is None or self.prev_row_y is None:
-                kappa_distance = 0.0
-            else:
-                kappa_distance = math.hypot(x - self.prev_row_x, y - self.prev_row_y)
+            kappa_distance = math.hypot(x - self.prev_row_x, y - self.prev_row_y)
 
         # La distancia acumulada avanza exactamente con el salto entre puntos guardados en filas consecutivas.
         self.total_distance += kappa_distance
@@ -182,6 +205,7 @@ class MapMetricsLogger(Node):
             "elapsed_s": elapsed,
             "v_real":      v,
             "w_real":      w,
+            "steering_angle_rad": steering_angle_rad,
             "brake":       self.pending_brake_events,
             "x":           x,
             "y":           y,
@@ -196,17 +220,56 @@ class MapMetricsLogger(Node):
         # Consume eventos de freno en el instante de escritura de la fila.
         self.pending_brake_events = 0
 
-        if self.latest_x is not None and self.latest_y is not None:
-            self.prev_row_x = x
-            self.prev_row_y = y
+        self.prev_row_x = x
+        self.prev_row_y = y
 
         self._writer.writerow(row)
         self._csv_file.flush()
 
-    # <-- New callback handling exact Gazebo Pose -->
-    def pose_cb(self, msg: Pose):
-        self.latest_x = msg.position.x
-        self.latest_y = msg.position.y
+    def _update_map_pose_and_omega(self, sample_time: float):
+        x = self.latest_x if self.latest_x is not None else 0.0
+        y = self.latest_y if self.latest_y is not None else 0.0
+
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                self.map_frame,
+                self.base_frame,
+                Time(),
+                timeout=Duration(seconds=self.tf_timeout_sec),
+            )
+            tx = tf.transform.translation.x
+            ty = tf.transform.translation.y
+            q = tf.transform.rotation
+
+            siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+            cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+            yaw = math.atan2(siny_cosp, cosy_cosp)
+
+            x = tx
+            y = ty
+            self.latest_x = x
+            self.latest_y = y
+
+            if self.prev_yaw is not None and self.prev_yaw_time is not None:
+                dt = sample_time - self.prev_yaw_time
+                if dt > 1e-6:
+                    yaw_delta = math.atan2(math.sin(yaw - self.prev_yaw), math.cos(yaw - self.prev_yaw))
+                    self.latest_w_real = yaw_delta / dt
+                else:
+                    self.latest_w_real = 0.0
+            else:
+                self.latest_w_real = 0.0
+
+            self.prev_yaw = yaw
+            self.prev_yaw_time = sample_time
+
+        except TransformException as ex:
+            self.get_logger().warn(
+                f"TF lookup fallido ({self.map_frame}->{self.base_frame}): {ex}",
+                throttle_duration_sec=2.0,
+            )
+
+        return x, y
 
     def path_cb(self, msg: Path):
         if self.path_saved:
@@ -239,6 +302,7 @@ class MapMetricsLogger(Node):
                 "elapsed_s": None,
                 "v_real": None,
                 "w_real": None,
+                "steering_angle_rad": None,
                 "brake": None,
                 "x": None,
                 "y": None,
@@ -253,14 +317,6 @@ class MapMetricsLogger(Node):
 
         self._csv_file.flush()
         self.path_saved = True
-
-    def clock_cb(self, msg):
-        t = msg.clock.sec + msg.clock.nanosec * 1e-9
-        self.last_clock = t
-
-        if self.start_flag and self.start_time is None:
-            self.start_time = t
-            self.get_logger().info(f"Reloj sincronizado post-/start en t={self.start_time:.6f}s.")
 
     # ─── Cierre ──────────────────────────────────────────────────────────
 
