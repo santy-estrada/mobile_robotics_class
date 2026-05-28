@@ -483,9 +483,9 @@ class PurePursuitNode(Node):
             steering_angle_deg = math.degrees(steering_angle_rad)
             steering_signal = angle_deg_to_signal(steering_angle_deg)
             omega_out = steering_signal
-            self.get_logger().info(
-                f"steering_angle={steering_angle_deg:.1f} deg, heading_error={math.degrees(heading_error):.1f} deg, lookahead={Ld:.2f} m"
-            )
+            # self.get_logger().info(
+            #     f"steering_angle={steering_angle_deg:.1f} deg, heading_error={math.degrees(heading_error):.1f} deg, lookahead={Ld:.2f} m"
+            # )
         else:
             omega = self.apply_ttc_turn_assist(omega)
 

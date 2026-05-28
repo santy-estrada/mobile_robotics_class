@@ -35,7 +35,7 @@ def generate_launch_description():
 		"lookahead_L0": 1.3, # 0.9 original
 		"lookahead_kv": 0.7, # 0.7 original
 		"lookahead_min": 1.0, # 1.0 original
-		"lookahead_max": 2.8	, # 2.5 original
+		"lookahead_max": 2.8	, # 2.0 original
 		"wheelbase": 0.31,
 	}
 
