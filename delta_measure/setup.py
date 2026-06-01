@@ -27,6 +27,7 @@ setup(
             'metrics_node = delta_measure.metrics_node:main',
             'map_metrics_node = delta_measure.map_metrics_node:main',
             'rc_map_metrics_node = delta_measure.rc_map_metrics_node:main',
+            'rc_mapping_metrics_node = delta_measure.rc_mapping_metrics_node:main',
         ],
     },
 )

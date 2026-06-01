@@ -23,19 +23,19 @@ def generate_launch_description():
 		"use_ttc": True,
 		"control_rate_hz": 20.0, #10 original
 		"goal_tolerance": 1.5,
-		"max_cmd_velocity": 2.77,
-		"speed_adaptive_min": 2.8,
+		"max_cmd_velocity": 2.85,
+		"speed_adaptive_min": 2.85,
 		"speed_heading_coupling": 0.5, # 0.5 original
 		"cmd_smoothing_factor": 0.2, # 0.3 original
 		"error_threshold": 15.0, # 10.0 original
 		"use_speed_adaptive": True,
-		"speed_nominal": 2.77,
+		"speed_nominal": 2.85,
 		"pub_errs": True,
 		"pub_debug": False,
 		"lookahead_L0": 1.3, # 0.9 original
 		"lookahead_kv": 0.7, # 0.7 original
 		"lookahead_min": 1.0, # 1.0 original
-		"lookahead_max": 2.8	, # 2.5 original
+		"lookahead_max": 2.45	, # 2.5 original
 		"wheelbase": 0.31,
 	}
 
@@ -92,7 +92,7 @@ def generate_launch_description():
 				description="Full path to the RViz2 config file.",
 			),
 			rc_pure_pursuit_node,
-			rc_ttc_brake_node,
+			# rc_ttc_brake_node,
 			rviz2_node,
 		]
 	)
